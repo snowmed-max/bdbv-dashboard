@@ -74,3 +74,8 @@ data/news.json
 ## 自动部署
 
 修改并提交任何文件后，Netlify 会自动从 GitHub 部署最新版本。
+
+
+## 自动抓取更新
+
+本项目已加入 GitHub Actions 自动更新模块。具体启用方法见 `AUTO_UPDATE.md`。
