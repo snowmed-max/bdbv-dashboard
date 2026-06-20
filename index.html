@@ -14,7 +14,7 @@
     h1{font-size:34px;line-height:1.15;margin:0 0 10px}.subtitle{color:var(--muted);font-size:15px;line-height:1.7}.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(249,115,22,.35);color:#fed7aa;background:rgba(249,115,22,.1);border-radius:999px;padding:6px 10px;font-size:13px;margin-bottom:14px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}.metric{padding:15px;border-radius:18px;background:linear-gradient(180deg,rgba(30,41,59,.9),rgba(15,23,42,.9));border:1px solid rgba(148,163,184,.16)}.metric .label{font-size:13px;color:var(--muted)}.metric .num{font-size:28px;font-weight:750;margin-top:8px}.metric .note{font-size:12px;color:#cbd5e1;margin-top:6px}.toolbar{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}.btn{border:1px solid rgba(148,163,184,.28);background:#1f2937;color:#e5e7eb;padding:10px 14px;border-radius:12px;cursor:pointer;font-weight:650}.btn.primary{background:#ea580c;border-color:#fb923c}.btn:hover{filter:brightness(1.08)}.section{margin-top:20px}.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}.small{font-size:13px;color:var(--muted);line-height:1.6}.source-pill{display:inline-block;padding:4px 8px;border-radius:999px;background:#243244;color:#cbd5e1;font-size:12px;margin:2px}.status{display:flex;align-items:center;gap:8px;color:#cbd5e1;font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 5px rgba(245,158,11,.1)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid rgba(148,163,184,.14);padding:10px 8px;text-align:left;vertical-align:top}th{color:#cbd5e1;font-weight:700}td{color:#e5e7eb}.tag{border-radius:8px;padding:3px 7px;font-size:12px;white-space:nowrap}.tag.official{background:rgba(34,197,94,.13);color:#86efac}.tag.media{background:rgba(56,189,248,.13);color:#7dd3fc}.tag.watch{background:rgba(245,158,11,.13);color:#fcd34d}.news-item{padding:12px 0;border-bottom:1px solid rgba(148,163,184,.14)}.news-item:last-child{border-bottom:none}.news-title{font-weight:700;line-height:1.45}.news-meta{font-size:12px;color:var(--muted);margin-top:4px}.map{height:300px;border-radius:18px;background:radial-gradient(circle at 55% 50%,rgba(249,115,22,.35),transparent 20%),radial-gradient(circle at 68% 40%,rgba(56,189,248,.25),transparent 12%),linear-gradient(135deg,#172033,#0b1220);border:1px solid rgba(148,163,184,.14);position:relative;overflow:hidden}.map:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:28px 28px}.pin{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px}.pin b{display:block;width:16px;height:16px;border-radius:50%;background:#f97316;box-shadow:0 0 0 8px rgba(249,115,22,.15),0 0 22px rgba(249,115,22,.7)}.pin span{background:rgba(15,23,42,.88);border:1px solid rgba(148,163,184,.22);padding:5px 8px;border-radius:999px;font-size:12px;white-space:nowrap}.pin.ug b{background:#38bdf8;box-shadow:0 0 0 8px rgba(56,189,248,.15),0 0 22px rgba(56,189,248,.7)}.form{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}.form input,.form select,textarea{width:100%;background:#0b1220;border:1px solid rgba(148,163,184,.24);color:#e5e7eb;border-radius:10px;padding:10px}.form .wide{grid-column:span 2}.footer{color:#94a3b8;font-size:12px;line-height:1.7;margin:22px 0 10px}.alert{border-left:4px solid var(--accent);padding:12px 14px;background:rgba(249,115,22,.08);border-radius:12px;color:#fed7aa}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.tab{padding:8px 10px;border-radius:10px;background:#1f2937;border:1px solid rgba(148,163,184,.2);cursor:pointer;color:#cbd5e1}.tab.active{background:#ea580c;color:#fff;border-color:#fb923c}
     .map-wrap{border-radius:18px;background:linear-gradient(135deg,#172033,#0b1220);border:1px solid rgba(148,163,184,.14);position:relative;overflow:hidden;padding:10px}
     .map-wrap::before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:28px 28px;pointer-events:none}
-    .map-svg{position:relative;z-index:1;width:100%;height:auto;display:block}
+    .map-svg{position:relative;z-index:1;width:100%;height:360px;display:block}
     .region{stroke:rgba(255,255,255,.55);stroke-width:2;vector-effect:non-scaling-stroke;transition:filter .15s ease,opacity .15s ease}
     .region:hover{filter:brightness(1.15)}
     .base-region{fill:#1d293d;stroke:rgba(255,255,255,.26);stroke-width:1.4;vector-effect:non-scaling-stroke}
@@ -70,7 +70,49 @@
       <div class="card">
         <h2>地区态势示意（行政区域底图）</h2>
         <div class="map-wrap">
-          <svg id="choroplethMap" class="map-svg" viewBox="0 0 760 500" aria-label="DRC 东部与乌干达疫情行政区域态势图" role="img"></svg>
+          <svg id="choroplethMap" class="map-svg" viewBox="0 0 760 500" aria-label="DRC 东部与乌干达疫情行政区域态势图" role="img">
+            <rect x="0" y="0" width="760" height="500" fill="transparent"></rect>
+            <path class="lake" d="M545 208 C560 192, 578 188, 593 198 C607 207, 606 224, 590 236 C573 248, 555 246, 544 233 C535 223, 535 216, 545 208 Z"></path>
+            <path class="lake" d="M468 332 C482 322, 496 319, 508 326 C516 331, 519 344, 512 352 C503 362, 487 365, 472 360 C458 355, 456 341, 468 332 Z"></path>
+
+            <path class="base-region" d="M130 110 L235 90 L285 120 L252 176 L150 172 L112 142 Z"></path>
+            <text class="map-label small" x="160" y="135" text-anchor="middle">Bas-Uele</text>
+
+            <path class="base-region" d="M235 90 L380 85 L420 122 L412 174 L300 170 L252 176 L285 120 Z"></path>
+            <text class="map-label small" x="324" y="132" text-anchor="middle">Haut-Uele</text>
+
+            <path class="base-region" d="M150 172 L252 176 L300 170 L412 174 L405 262 L330 295 L205 290 L135 250 Z"></path>
+            <text class="map-label small" x="260" y="225" text-anchor="middle">Tshopo</text>
+
+            <path id="ituri" class="region" data-key="ituri" data-name="Ituri" data-cases="563" data-note="WHO DON607：DRC 676 例中 Ituri 563 例。" d="M412 174 L490 155 L548 180 L560 262 L515 300 L405 262 Z" fill="#ef4444"></path>
+            <text class="map-label" x="480" y="226" text-anchor="middle">Ituri</text>
+            <text id="ituriCount" class="map-label small" x="480" y="245" text-anchor="middle">563 例</text>
+
+            <path id="north-kivu" class="region" data-key="northKivu" data-name="North Kivu" data-cases="32" data-note="WHO DON607 / DRC 地区级口径。" d="M405 262 L515 300 L505 357 L438 382 L386 338 Z" fill="#f6b01a"></path>
+            <text class="map-label" x="446" y="324" text-anchor="middle">North Kivu</text>
+            <text id="northKivuCount" class="map-label small" x="446" y="342" text-anchor="middle">32 例</text>
+
+            <path id="south-kivu" class="region" data-key="southKivu" data-name="South Kivu" data-cases="3" data-note="WHO DON607 / DRC 地区级口径。" d="M386 338 L438 382 L430 442 L346 430 L322 378 Z" fill="#fde68a"></path>
+            <text class="map-label" x="382" y="394" text-anchor="middle">South Kivu</text>
+            <text id="southKivuCount" class="map-label small" x="382" y="412" text-anchor="middle">3 例</text>
+
+            <path class="base-region" d="M205 290 L330 295 L386 338 L322 378 L210 378 L180 334 Z"></path>
+            <text class="map-label small" x="250" y="340" text-anchor="middle">Maniema</text>
+
+            <path class="base-region" d="M210 378 L322 378 L346 430 L336 470 L220 472 L176 426 Z"></path>
+            <text class="map-label small" x="240" y="435" text-anchor="middle">Tanganyika</text>
+
+            <path id="uganda" class="region" data-key="uganda" data-name="Uganda" data-cases="19" data-note="WHO DON607：乌干达累计 19 例。" d="M560 135 L650 118 L700 170 L678 255 L610 286 L560 262 L548 180 Z" fill="#f8c247"></path>
+            <text class="map-label" x="624" y="208" text-anchor="middle">Uganda</text>
+            <text id="ugandaCount" class="map-label small" x="624" y="226" text-anchor="middle">19 例</text>
+
+            <path class="country-outline" d="M110 142 L130 110 L235 90 L380 85 L560 135 L548 180 L560 262 L505 357 L430 442 L336 470 L220 472 L176 426 L135 250 Z"></path>
+            <path class="country-outline" d="M560 135 L650 118 L700 170 L678 255 L610 286 L560 262 L548 180 Z"></path>
+            <text class="map-label small" x="260" y="58">DRC · 东部重点区域</text>
+            <text class="map-label small" x="630" y="96">Uganda</text>
+            <text class="map-label small" x="570" y="196">Lake Albert</text>
+            <text class="map-label small" x="505" y="320">Lake Kivu</text>
+          </svg>
         </div>
         <div class="map-legend">
           <div class="legend-scale">
@@ -354,58 +396,53 @@ function renderMap(){
   const tooltip=document.getElementById('mapTooltip');
   const legendText=document.getElementById('mapLegendText');
 
-  const regionValues = Object.values(regionalCounts)
+  const regionValues=Object.values(regionalCounts)
     .map(d=>Number(d.cases))
     .filter(v=>!Number.isNaN(v) && v>=0);
-  const max = regionValues.length ? Math.max(...regionValues) : 1;
-  const min = regionValues.length ? Math.min(...regionValues) : 0;
+  const max=regionValues.length ? Math.max(...regionValues) : 1;
+  const min=regionValues.length ? Math.min(...regionValues) : 0;
 
   if(legendText){
     legendText.textContent=`地区着色基于 data/regional.json：最少 ${fmt(min)} 例，最多 ${fmt(max)} 例。`;
   }
 
-  let markup=`
-    <rect x="0" y="0" width="760" height="500" fill="transparent"></rect>
-    <path class="lake" d="M545 208 C560 192, 578 188, 593 198 C607 207, 606 224, 590 236 C573 248, 555 246, 544 233 C535 223, 535 216, 545 208 Z"></path>
-    <path class="lake" d="M468 332 C482 322, 496 319, 508 326 C516 331, 519 344, 512 352 C503 362, 487 365, 472 360 C458 355, 456 341, 468 332 Z"></path>
-  `;
+  const svgIds={
+    ituri:'ituri',
+    northKivu:'north-kivu',
+    southKivu:'south-kivu',
+    uganda:'uganda'
+  };
 
-  mapRegions.forEach(r=>{
-    if(r.cls==='base-region'){
-      markup+=`<path class="base-region" d="${r.d}"></path>`;
-      markup+=`<text class="map-label small" x="${r.label[0]}" y="${r.label[1]}" text-anchor="middle">${r.name}</text>`;
-    }else{
-      const info = regionalCounts[r.key] || {name:r.name, region:r.name, cases:0, note:'暂无地区级数据'};
-      const displayName = info.name || info.region || r.name;
-      const cases = Number(info.cases || 0);
-      const fill = heatColor(cases,max);
-      const note = (info.note || '').replace(/"/g,'&quot;');
+  Object.keys(svgIds).forEach(key=>{
+    const el=document.getElementById(svgIds[key]);
+    const info=regionalCounts[key];
+    if(!el || !info) return;
 
-      markup+=`<path id="${r.id}" class="region" data-key="${r.key}" data-name="${displayName}" data-cases="${cases}" data-note="${note}" d="${r.d}" fill="${fill}"></path>`;
-      markup+=`<text class="map-label" x="${r.label[0]}" y="${r.label[1]}" text-anchor="middle">${r.name}</text>`;
-      markup+=`<text class="map-label small" x="${r.countPos[0]}" y="${r.countPos[1]}" text-anchor="middle">${fmt(cases)} 例</text>`;
-    }
+    const cases=Number(info.cases ?? 0);
+    const displayName=info.name || info.region || key;
+    const note=info.note || '';
+
+    el.setAttribute('fill', heatColor(cases,max));
+    el.dataset.name=displayName;
+    el.dataset.cases=String(cases);
+    el.dataset.note=note;
+
+    const countLabel=document.getElementById(key+'Count');
+    if(countLabel) countLabel.textContent=`${fmt(cases)} 例`;
   });
 
-  markup+=`
-    <path class="country-outline" d="${countryOutlines.drc}"></path>
-    <path class="country-outline" d="${countryOutlines.uganda}"></path>
-    <text class="map-label small" x="260" y="58">DRC · 东部重点区域</text>
-    <text class="map-label small" x="630" y="96">Uganda</text>
-    <text class="map-label small" x="570" y="196">Lake Albert</text>
-    <text class="map-label small" x="505" y="320">Lake Kivu</text>
-  `;
-
-  svg.innerHTML=markup;
-
   svg.querySelectorAll('.region').forEach(el=>{
-    el.addEventListener('mouseenter',()=>{
-      const note = el.dataset.note ? `<br>${el.dataset.note}` : '';
-      tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong>${note}`;
-    });
-    el.addEventListener('mouseleave',()=>{
-      tooltip.textContent='将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。';
-    });
+    el.onmouseenter=()=>{
+      const note=el.dataset.note ? `<br>${el.dataset.note}` : '';
+      if(tooltip){
+        tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong>${note}`;
+      }
+    };
+    el.onmouseleave=()=>{
+      if(tooltip){
+        tooltip.textContent='将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。';
+      }
+    };
   });
 }
 
