@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Auto-update public BDBV dashboard data.
+Safer auto-update script for BDBV dashboard.
 
-What this script does:
-1. Fetches latest news from GDELT and updates data/news.json.
-2. Fetches selected official/public-health pages and extracts candidate numbers.
-3. Writes all extracted candidates to data/candidates.json.
-4. Optionally appends a new official row to data/timeseries.json when a higher
-   confirmed-case count is found from official/quasi-official sources.
+Design principle:
+- Automated scripts are good at "finding signals", not at making final public-health
+  claims from unstructured web pages.
+- Therefore this script writes auto-extracted numbers to data/candidates.json by default.
+- It does NOT append to data/timeseries.json unless AUTO_APPEND_OFFICIAL=true and
+  the candidate passes strict validation rules. The workflow provided with this package
+  sets AUTO_APPEND_OFFICIAL=false.
 
-Important:
-- This script is intentionally conservative. It marks automatically extracted
-  official metrics as "auto_official_candidate" and keeps source URLs.
-- Media numbers are NOT appended to timeseries by default. They update news.json
-  and candidates.json only.
+Main safeguards:
+1. Reject likely years such as 2026 when interpreted as case counts.
+2. Reject numbers near "suspected", "probable", "contacts", "health zones", "%", etc.
+3. Extract only from local context windows that mention Bundibugyo/Ebola plus cases/deaths/recovered.
+4. Mark every candidate with confidence, warnings and source URL.
+5. Keep official/quasi-official and media candidates separated.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
 
 import requests
@@ -38,42 +40,64 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 
 TIMESERIES = DATA_DIR / "timeseries.json"
-REGIONAL = DATA_DIR / "regional.json"
 NEWS = DATA_DIR / "news.json"
 CANDIDATES = DATA_DIR / "candidates.json"
 
-AUTO_APPEND_OFFICIAL = os.getenv("AUTO_APPEND_OFFICIAL", "true").lower() == "true"
+AUTO_APPEND_OFFICIAL = os.getenv("AUTO_APPEND_OFFICIAL", "false").lower() == "true"
 AUTO_APPEND_MEDIA = os.getenv("AUTO_APPEND_MEDIA", "false").lower() == "true"
 
 QUERY = '(Bundibugyo OR "Ebola Bundibugyo" OR "Bundibugyo virus") (DRC OR Congo OR Uganda OR Ebola)'
 
+# Prefer pages that are about the current situation, not archive/list pages.
 OFFICIAL_SOURCES = [
     {
         "name": "CDC Current Situation",
         "url": "https://www.cdc.gov/ebola/situation-summary/index.html",
         "type": "official",
+        "append_allowed": False,  # candidate only unless manually reviewed
     },
     {
-        "name": "WHO Disease Outbreak News",
+        "name": "ECDC outbreak page",
+        "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
+        "type": "quasi_official",
+        "append_allowed": False,
+    },
+    {
+        "name": "WHO Disease Outbreak News index",
         "url": "https://www.who.int/emergencies/disease-outbreak-news",
-        "type": "official",
+        "type": "official_index",
+        "append_allowed": False,  # index pages are too risky for numeric extraction
     },
     {
         "name": "WHO AFRO Ebola topic",
         "url": "https://www.afro.who.int/health-topics/ebola-disease",
-        "type": "official",
-    },
-    {
-        "name": "ECDC Ebola outbreak page",
-        "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
-        "type": "quasi_official",
+        "type": "official_index",
+        "append_allowed": False,
     },
     {
         "name": "Africa CDC news",
         "url": "https://africacdc.org/news/",
-        "type": "quasi_official",
+        "type": "quasi_official_index",
+        "append_allowed": False,
     },
 ]
+
+BAD_CONTEXT_WORDS = [
+    "suspected", "probable", "contacts", "contact", "health zones", "health zone",
+    "districts", "laboratory samples", "samples", "alerts", "tested", "testing",
+    "pui", "under investigation", "previous outbreak", "historical", "history",
+    "since 1976", "1976", "2024", "2025", "2027", "percentage", "%", "percent"
+]
+
+GOOD_CASE_WORDS = [
+    "confirmed cases", "confirmed case", "confirmed infections", "confirmed infection",
+    "laboratory-confirmed cases", "confirmed", "case count"
+]
+GOOD_DEATH_WORDS = ["deaths", "death", "fatalities", "died"]
+GOOD_RECOVERY_WORDS = ["recovered", "recovery", "discharged", "survivors"]
+
+DISEASE_WORDS = ["bundibugyo", "ebola", "bdbv"]
+LOCATION_WORDS = ["drc", "democratic republic of the congo", "congo", "uganda"]
 
 
 def today() -> str:
@@ -95,9 +119,9 @@ def save_json(path: Path, obj: Any) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def fetch(url: str, timeout: int = 20) -> Optional[str]:
+def fetch(url: str, timeout: int = 25) -> Optional[str]:
     headers = {
-        "User-Agent": "BDBV-dashboard-monitor/1.0 (+https://github.com/)",
+        "User-Agent": "BDBV-dashboard-monitor/1.1 (+https://github.com/)",
         "Accept": "text/html,application/json;q=0.9,*/*;q=0.8",
     }
     try:
@@ -122,56 +146,148 @@ def clean_text(raw: str) -> str:
     return txt.strip()
 
 
-def to_int(s: str) -> Optional[int]:
+def to_int(num: str) -> Optional[int]:
     try:
-        return int(re.sub(r"[,\s]", "", s))
+        return int(re.sub(r"[,\s]", "", num))
     except Exception:
         return None
 
 
-def extract_metrics(text: str) -> Dict[str, Optional[int]]:
-    """Heuristic extraction; intentionally simple and conservative."""
-    lower = text.lower()
-    metrics: Dict[str, Optional[int]] = {"cases": None, "deaths": None, "recovered": None}
+def has_any(text: str, words: List[str]) -> bool:
+    t = text.lower()
+    return any(w in t for w in words)
 
-    # Search within windows containing relevant keywords to reduce false positives.
-    def best_number_for(keywords: List[str], labels: List[str]) -> Optional[int]:
-        values: List[int] = []
-        for kw in keywords:
-            for m in re.finditer(re.escape(kw.lower()), lower):
-                start = max(0, m.start() - 120)
-                end = min(len(text), m.end() + 120)
-                window = text[start:end]
-                # Prefer numbers near the keyword
-                nums = re.findall(r"(?<![\d.])\d{1,3}(?:,\d{3})+|\b\d{1,5}\b", window)
-                for n in nums:
-                    val = to_int(n)
-                    if val is not None and val >= 0:
-                        values.append(val)
-        if not values:
-            return None
-        # For outbreak cumulative counts, largest nearby value is often the cumulative number.
-        return max(values)
 
-    metrics["cases"] = best_number_for(
-        ["confirmed cases", "confirmed case", "cases confirmed", "case count", "cases"],
-        ["cases"],
-    )
-    metrics["deaths"] = best_number_for(
-        ["deaths", "death", "fatalities", "died"],
-        ["deaths"],
-    )
-    metrics["recovered"] = best_number_for(
-        ["recovered", "recovery", "discharged", "survivors"],
-        ["recovered"],
-    )
+def is_likely_year(value: int) -> bool:
+    return 1900 <= value <= 2100
 
-    # Guardrails: avoid absurd values caused by unrelated dates or page boilerplate.
-    for k, v in list(metrics.items()):
-        if v is not None and (v > 100000 or v < 0):
-            metrics[k] = None
 
-    return metrics
+def reject_number_by_context(value: int, window: str) -> Optional[str]:
+    low = window.lower()
+    if is_likely_year(value):
+        return "likely_year"
+    if any(w in low for w in BAD_CONTEXT_WORDS):
+        return "bad_context_word"
+    if re.search(rf"{value}\s*%", window):
+        return "percentage"
+    if value > 100000:
+        return "implausibly_large"
+    return None
+
+
+def number_candidates_near_keywords(text: str, keywords: List[str], metric: str) -> List[Tuple[int, str, int]]:
+    """
+    Return (value, window, score).
+    Score is based on local context. Higher is better.
+    """
+    low = text.lower()
+    out: List[Tuple[int, str, int]] = []
+    for kw in keywords:
+        for m in re.finditer(re.escape(kw.lower()), low):
+            start = max(0, m.start() - 140)
+            end = min(len(text), m.end() + 140)
+            window = text[start:end]
+            nums = re.findall(r"(?<![\d.])\d{1,3}(?:,\d{3})+|\b\d{1,5}\b", window)
+            for n in nums:
+                value = to_int(n)
+                if value is None:
+                    continue
+                reason = reject_number_by_context(value, window)
+                if reason:
+                    continue
+                score = 0
+                wl = window.lower()
+                if has_any(wl, DISEASE_WORDS):
+                    score += 3
+                if has_any(wl, LOCATION_WORDS):
+                    score += 2
+                if metric == "cases" and has_any(wl, ["confirmed", "laboratory-confirmed"]):
+                    score += 4
+                if metric == "deaths" and has_any(wl, GOOD_DEATH_WORDS):
+                    score += 3
+                if metric == "recovered" and has_any(wl, GOOD_RECOVERY_WORDS):
+                    score += 3
+                # Penalize vague windows.
+                if "suspected" in wl or "probable" in wl:
+                    score -= 5
+                out.append((value, window, score))
+    return out
+
+
+def pick_metric(text: str, keywords: List[str], metric: str) -> Tuple[Optional[int], List[str], int]:
+    cands = number_candidates_near_keywords(text, keywords, metric)
+    warnings: List[str] = []
+    if not cands:
+        return None, ["no_candidate_found"], 0
+
+    # Keep reasonably high context score.
+    cands = [c for c in cands if c[2] >= 4]
+    if not cands:
+        return None, ["only_low_confidence_candidates"], 0
+
+    # In cumulative outbreak summaries, the highest valid number near "confirmed cases"
+    # often reflects the cumulative count, but we do not trust it enough for auto append.
+    cands.sort(key=lambda x: (x[2], x[0]), reverse=True)
+    value, window, score = cands[0]
+
+    if len({v for v, _, _ in cands}) > 1:
+        warnings.append("multiple_possible_numbers")
+
+    return value, warnings, score
+
+
+def extract_metrics_safely(text: str, source_type: str) -> Dict[str, Any]:
+    low = text.lower()
+    warnings: List[str] = []
+
+    if not has_any(low, DISEASE_WORDS):
+        warnings.append("missing_disease_keyword")
+    if not has_any(low, LOCATION_WORDS):
+        warnings.append("missing_location_keyword")
+
+    cases, w1, s1 = pick_metric(text, GOOD_CASE_WORDS, "cases")
+    deaths, w2, s2 = pick_metric(text, GOOD_DEATH_WORDS, "deaths")
+    recovered, w3, s3 = pick_metric(text, GOOD_RECOVERY_WORDS, "recovered")
+
+    warnings.extend(w1 + w2 + w3)
+
+    # Consistency checks
+    if cases is not None and deaths is not None and deaths > cases:
+        warnings.append("deaths_greater_than_cases")
+    if cases is not None and recovered is not None and recovered > cases:
+        warnings.append("recovered_greater_than_cases")
+
+    # Confidence score
+    score = max(s1, s2, s3)
+    if cases is not None:
+        score += 2
+    if deaths is not None:
+        score += 1
+    if recovered is not None:
+        score += 1
+    if source_type in ("official", "quasi_official"):
+        score += 2
+    if source_type.endswith("_index"):
+        score -= 3
+        warnings.append("index_page_not_safe_for_auto_timeseries")
+
+    if warnings:
+        score -= min(4, len(set(warnings)))
+
+    confidence = "low"
+    if score >= 10 and cases is not None and not any(w in warnings for w in ["missing_disease_keyword", "missing_location_keyword", "index_page_not_safe_for_auto_timeseries"]):
+        confidence = "medium"
+    if score >= 13 and cases is not None and source_type in ("official", "quasi_official") and not warnings:
+        confidence = "high"
+
+    return {
+        "cases": cases,
+        "deaths": deaths,
+        "recovered": recovered,
+        "confidence": confidence,
+        "score": score,
+        "warnings": sorted(set(warnings)),
+    }
 
 
 def fetch_gdelt_news() -> List[Dict[str, Any]]:
@@ -188,7 +304,7 @@ def fetch_gdelt_news() -> List[Dict[str, Any]]:
         print(f"[WARN] GDELT JSON parse failed: {e}", file=sys.stderr)
         return []
 
-    rows = []
+    rows: List[Dict[str, Any]] = []
     for a in payload.get("articles", [])[:30]:
         title = a.get("title") or ""
         link = a.get("url") or ""
@@ -201,16 +317,14 @@ def fetch_gdelt_news() -> List[Dict[str, Any]]:
             date = today()
         if not link or not title:
             continue
-        rows.append(
-            {
-                "date": date,
-                "title": title,
-                "source": domain or "GDELT",
-                "url": link,
-                "summary": title,
-                "status": "auto_media",
-            }
-        )
+        rows.append({
+            "date": date,
+            "title": title,
+            "source": domain or "GDELT",
+            "url": link,
+            "summary": title,
+            "status": "auto_media",
+        })
     return rows
 
 
@@ -234,94 +348,86 @@ def build_candidates_from_sources(news_rows: List[Dict[str, Any]]) -> List[Dict[
         if not raw:
             continue
         text = clean_text(raw)
-        # Only treat pages mentioning Bundibugyo/Ebola/Congo/Uganda as relevant.
-        rel = text.lower()
-        if not any(x in rel for x in ["bundibugyo", "ebola", "congo", "uganda", "drc"]):
-            continue
-        metrics = extract_metrics(text)
-        if any(v is not None for v in metrics.values()):
-            candidates.append(
-                {
-                    "date": today(),
-                    "source": src["name"],
-                    "source_type": src["type"],
-                    "url": src["url"],
-                    "cases": metrics.get("cases"),
-                    "deaths": metrics.get("deaths"),
-                    "recovered": metrics.get("recovered"),
-                    "status": "auto_official_candidate",
-                    "note": "自动从官方/准官方页面提取，需结合原文复核。",
-                }
-            )
+        metrics = extract_metrics_safely(text, src["type"])
+
+        if any(metrics.get(k) is not None for k in ["cases", "deaths", "recovered"]) or metrics.get("warnings"):
+            candidates.append({
+                "date": today(),
+                "source": src["name"],
+                "source_type": src["type"],
+                "url": src["url"],
+                "cases": metrics.get("cases"),
+                "deaths": metrics.get("deaths"),
+                "recovered": metrics.get("recovered"),
+                "confidence": metrics.get("confidence"),
+                "score": metrics.get("score"),
+                "warnings": metrics.get("warnings"),
+                "status": "auto_official_candidate",
+                "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+                "auto_append_allowed_by_source": src.get("append_allowed", False),
+            })
         time.sleep(0.5)
 
-    # Media candidates from titles only: not reliable enough for timeseries.
-    number_pattern = re.compile(r"(\d{2,5})")
+    # Media remains news/candidate only.
     for n in news_rows[:20]:
         title = n.get("title", "")
         if not title:
             continue
-        if number_pattern.search(title):
-            candidates.append(
-                {
-                    "date": n.get("date") or today(),
-                    "source": n.get("source") or "media",
-                    "source_type": "media",
-                    "url": n.get("url"),
-                    "cases": None,
-                    "deaths": None,
-                    "recovered": None,
-                    "status": "media_candidate",
-                    "note": title,
-                }
-            )
+        if re.search(r"\b\d{2,5}\b", title):
+            candidates.append({
+                "date": n.get("date") or today(),
+                "source": n.get("source") or "media",
+                "source_type": "media",
+                "url": n.get("url"),
+                "cases": None,
+                "deaths": None,
+                "recovered": None,
+                "confidence": "low",
+                "score": 0,
+                "warnings": ["media_title_number_only"],
+                "status": "media_candidate",
+                "note": title,
+                "auto_append_allowed_by_source": False,
+            })
 
     return candidates
 
 
 def append_official_timeseries_if_confident(candidates: List[Dict[str, Any]]) -> bool:
+    if not AUTO_APPEND_OFFICIAL:
+        return False
+
     rows: List[Dict[str, Any]] = load_json(TIMESERIES, [])
     if not rows:
         return False
 
-    latest_official_cases = max(
-        [r.get("cases") or 0 for r in rows if r.get("type") == "official"],
-        default=0,
-    )
-    existing_keys = {(r.get("date"), r.get("source"), r.get("cases")) for r in rows}
+    latest_official_cases = max([r.get("cases") or 0 for r in rows if r.get("type") == "official"], default=0)
 
-    official_candidates = [
+    eligible = [
         c for c in candidates
         if c.get("source_type") in ("official", "quasi_official")
+        and c.get("confidence") == "high"
+        and c.get("auto_append_allowed_by_source") is True
         and isinstance(c.get("cases"), int)
-        and c["cases"] >= latest_official_cases
+        and (c.get("cases") or 0) > latest_official_cases
+        and not c.get("warnings")
     ]
-    if not official_candidates:
+
+    if not eligible:
         return False
 
-    # Choose the highest case count from official/quasi-official candidates.
-    best = max(official_candidates, key=lambda c: c.get("cases") or 0)
-
-    # Only append if new case count is higher than latest official count.
-    if (best.get("cases") or 0) <= latest_official_cases:
-        return False
-
-    new_row = {
+    # Even with high confidence, write a cautious note.
+    best = max(eligible, key=lambda c: c.get("cases") or 0)
+    rows.append({
         "date": best.get("date") or today(),
         "cases": best.get("cases"),
         "deaths": best.get("deaths"),
         "recovered": best.get("recovered"),
         "type": "official",
-        "source": "AUTO: " + (best.get("source") or "official source"),
+        "source": "AUTO-HIGH-CONFIDENCE: " + (best.get("source") or "official source"),
         "url": best.get("url"),
-        "note": "自动抓取新增官方/准官方口径；建议人工复核原文后保留或修正。",
-    }
-
-    key = (new_row["date"], new_row["source"], new_row["cases"])
-    if key in existing_keys:
-        return False
-
-    rows.append(new_row)
+        "note": "自动高置信追加；仍建议人工复核。若有误请删除本条并修正脚本规则。",
+    })
     rows.sort(key=lambda r: r.get("date", ""))
     save_json(TIMESERIES, rows)
     return True
@@ -336,22 +442,20 @@ def main() -> None:
     save_json(NEWS, merged_news)
 
     candidates = build_candidates_from_sources(gdelt_news)
-    # Keep only current candidate batch plus top recent prior candidates.
     old_candidates = load_json(CANDIDATES, [])
     combined = candidates + old_candidates
+
     seen = set()
     deduped = []
     for c in combined:
-        key = (c.get("date"), c.get("source"), c.get("url"), c.get("cases"), c.get("deaths"))
+        key = (c.get("date"), c.get("source"), c.get("url"), c.get("cases"), c.get("deaths"), c.get("recovered"))
         if key in seen:
             continue
         seen.add(key)
         deduped.append(c)
-    save_json(CANDIDATES, deduped[:80])
 
-    changed_timeseries = False
-    if AUTO_APPEND_OFFICIAL:
-        changed_timeseries = append_official_timeseries_if_confident(deduped)
+    save_json(CANDIDATES, deduped[:100])
+    changed_timeseries = append_official_timeseries_if_confident(deduped)
 
     print(json.dumps({
         "date": today(),
@@ -361,6 +465,7 @@ def main() -> None:
         "timeseries_appended": changed_timeseries,
         "auto_append_official": AUTO_APPEND_OFFICIAL,
         "auto_append_media": AUTO_APPEND_MEDIA,
+        "safety_mode": "candidate_first",
     }, ensure_ascii=False, indent=2))
 
 
