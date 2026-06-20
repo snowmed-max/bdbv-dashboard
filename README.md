@@ -33,3 +33,4 @@ data/news.json
 ```
 
 再用 GitHub Actions 定时抓取 WHO、CDC、ECDC、GDELT 等来源，自动更新 JSON 数据。
+测试 GitHub 自动部署。
