@@ -1,38 +1,5 @@
 [
   {
-    "date": "2026-06-20",
-    "source": "CDC Current Situation",
-    "source_type": "official",
-    "url": "https://www.cdc.gov/ebola/situation-summary/index.html",
-    "cases": 21,
-    "deaths": 2012,
-    "recovered": null,
-    "status": "auto_official_candidate",
-    "note": "自动从官方/准官方页面提取，需结合原文复核。"
-  },
-  {
-    "date": "2026-06-20",
-    "source": "WHO AFRO Ebola topic",
-    "source_type": "official",
-    "url": "https://www.afro.who.int/health-topics/ebola-disease",
-    "cases": 2016,
-    "deaths": null,
-    "recovered": null,
-    "status": "auto_official_candidate",
-    "note": "自动从官方/准官方页面提取，需结合原文复核。"
-  },
-  {
-    "date": "2026-06-20",
-    "source": "ECDC Ebola outbreak page",
-    "source_type": "quasi_official",
-    "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
-    "cases": 2026,
-    "deaths": 837,
-    "recovered": null,
-    "status": "auto_official_candidate",
-    "note": "自动从官方/准官方页面提取，需结合原文复核。"
-  },
-  {
     "date": "2026-06-19",
     "source": "africa.com",
     "source_type": "media",
