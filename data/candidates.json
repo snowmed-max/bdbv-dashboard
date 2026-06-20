@@ -1,1 +1,145 @@
-[]
+[
+  {
+    "date": "2026-06-20",
+    "source": "CDC Current Situation",
+    "source_type": "official",
+    "url": "https://www.cdc.gov/ebola/situation-summary/index.html",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": 1,
+    "warnings": [
+      "no_candidate_found"
+    ],
+    "status": "auto_official_candidate",
+    "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-20",
+    "source": "ECDC outbreak page",
+    "source_type": "quasi_official",
+    "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
+    "cases": 837,
+    "deaths": 837,
+    "recovered": null,
+    "confidence": "low",
+    "score": 9,
+    "warnings": [
+      "multiple_possible_numbers",
+      "no_candidate_found"
+    ],
+    "status": "auto_official_candidate",
+    "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-20",
+    "source": "WHO Disease Outbreak News index",
+    "source_type": "official_index",
+    "url": "https://www.who.int/emergencies/disease-outbreak-news",
+    "cases": 11,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": -1,
+    "warnings": [
+      "index_page_not_safe_for_auto_timeseries",
+      "missing_disease_keyword",
+      "missing_location_keyword",
+      "multiple_possible_numbers",
+      "no_candidate_found"
+    ],
+    "status": "auto_official_candidate",
+    "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-20",
+    "source": "WHO AFRO Ebola topic",
+    "source_type": "official_index",
+    "url": "https://www.afro.who.int/health-topics/ebola-disease",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": -5,
+    "warnings": [
+      "index_page_not_safe_for_auto_timeseries",
+      "no_candidate_found"
+    ],
+    "status": "auto_official_candidate",
+    "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-20",
+    "source": "Africa CDC news",
+    "source_type": "quasi_official_index",
+    "url": "https://africacdc.org/news/",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": -5,
+    "warnings": [
+      "index_page_not_safe_for_auto_timeseries",
+      "no_candidate_found"
+    ],
+    "status": "auto_official_candidate",
+    "note": "自动提取候选数据。进入正式 timeseries.json 前必须人工复核原文上下文。",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-19",
+    "source": "africa.com",
+    "source_type": "media",
+    "url": "https://africa.com/2026/06/19/",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": 0,
+    "warnings": [
+      "media_title_number_only"
+    ],
+    "status": "media_candidate",
+    "note": "June 19 , 2026 - Africa . com",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-05-16",
+    "source": "breakingnews.ie",
+    "source_type": "media",
+    "url": "https://www.breakingnews.ie/world/constant-burials-reported-in-dr-congo-as-deaths-in-new-ebola-outbreak-reach-80-1900785.html",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": 0,
+    "warnings": [
+      "media_title_number_only"
+    ],
+    "status": "media_candidate",
+    "note": "Constant burials reported in DR Congo as deaths in new Ebola outbreak reach 80",
+    "auto_append_allowed_by_source": false
+  },
+  {
+    "date": "2026-06-11",
+    "source": "medicaldaily.com",
+    "source_type": "media",
+    "url": "http://www.medicaldaily.com/ebola-bundibugyo-outbreak-2026-drc-uganda-who-emergency-us-response-475582",
+    "cases": null,
+    "deaths": null,
+    "recovered": null,
+    "confidence": "low",
+    "score": 0,
+    "warnings": [
+      "media_title_number_only"
+    ],
+    "status": "media_candidate",
+    "note": "Ebola Outbreak Reaches 598 Confirmed Cases and 115 Deaths in DRC U . S . Pledges $220 Million as WHO Emergency Escalates",
+    "auto_append_allowed_by_source": false
+  }
+]
