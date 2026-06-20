@@ -80,7 +80,7 @@
           </div>
           <div class="legend-note" id="mapLegendText">地区着色基于最新可获得的地区级病例数</div>
         </div>
-        <div id="mapTooltip" class="map-tooltip">将鼠标移动到区域上可查看病例数。当前使用的地区级数据：Ituri 563，North Kivu 32，South Kivu 3，Uganda 19。</div>
+        <div id="mapTooltip" class="map-tooltip">将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。</div>
         <p class="small">说明：这是为监测用途绘制的简化行政区底图，强调区域关系和风险深浅，不等同于正式 GIS 边界。颜色深浅按最新可获得的地区级病例数自动变化。</p>
       </div>
       <div class="card">
@@ -350,12 +350,19 @@ function addPoint(){
 function renderMap(){
   const svg=document.getElementById('choroplethMap');
   if(!svg) return;
+
   const tooltip=document.getElementById('mapTooltip');
   const legendText=document.getElementById('mapLegendText');
-  const values=Object.values(regionalCounts).map(d=>d.cases);
-  const max=Math.max(...values);
-  const min=Math.min(...values);
-  legendText.textContent=`地区着色基于最新可获得的地区级病例数：最少 ${fmt(min)} 例，最多 ${fmt(max)} 例。`;
+
+  const regionValues = Object.values(regionalCounts)
+    .map(d=>Number(d.cases))
+    .filter(v=>!Number.isNaN(v) && v>=0);
+  const max = regionValues.length ? Math.max(...regionValues) : 1;
+  const min = regionValues.length ? Math.min(...regionValues) : 0;
+
+  if(legendText){
+    legendText.textContent=`地区着色基于 data/regional.json：最少 ${fmt(min)} 例，最多 ${fmt(max)} 例。`;
+  }
 
   let markup=`
     <rect x="0" y="0" width="760" height="500" fill="transparent"></rect>
@@ -368,11 +375,15 @@ function renderMap(){
       markup+=`<path class="base-region" d="${r.d}"></path>`;
       markup+=`<text class="map-label small" x="${r.label[0]}" y="${r.label[1]}" text-anchor="middle">${r.name}</text>`;
     }else{
-      const info=regionalCounts[r.key];
-      const fill=heatColor(info.cases,max);
-      markup+=`<path id="${r.id}" class="region" data-key="${r.key}" data-name="${info.name}" data-cases="${info.cases}" data-note="${info.note.replace(/"/g,'&quot;')}" d="${r.d}" fill="${fill}"></path>`;
+      const info = regionalCounts[r.key] || {name:r.name, region:r.name, cases:0, note:'暂无地区级数据'};
+      const displayName = info.name || info.region || r.name;
+      const cases = Number(info.cases || 0);
+      const fill = heatColor(cases,max);
+      const note = (info.note || '').replace(/"/g,'&quot;');
+
+      markup+=`<path id="${r.id}" class="region" data-key="${r.key}" data-name="${displayName}" data-cases="${cases}" data-note="${note}" d="${r.d}" fill="${fill}"></path>`;
       markup+=`<text class="map-label" x="${r.label[0]}" y="${r.label[1]}" text-anchor="middle">${r.name}</text>`;
-      markup+=`<text class="map-label small" x="${r.countPos[0]}" y="${r.countPos[1]}" text-anchor="middle">${fmt(info.cases)} 例</text>`;
+      markup+=`<text class="map-label small" x="${r.countPos[0]}" y="${r.countPos[1]}" text-anchor="middle">${fmt(cases)} 例</text>`;
     }
   });
 
@@ -386,12 +397,14 @@ function renderMap(){
   `;
 
   svg.innerHTML=markup;
+
   svg.querySelectorAll('.region').forEach(el=>{
     el.addEventListener('mouseenter',()=>{
-      tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong><br>${el.dataset.note}`;
+      const note = el.dataset.note ? `<br>${el.dataset.note}` : '';
+      tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong>${note}`;
     });
     el.addEventListener('mouseleave',()=>{
-      tooltip.textContent='将鼠标移动到区域上可查看病例数。当前使用的地区级数据：Ituri 563，North Kivu 32，South Kivu 3，Uganda 19。';
+      tooltip.textContent='将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。';
     });
   });
 }
@@ -433,9 +446,14 @@ async function loadExternalData(){
           const key=item.key;
           if(!key) return;
           current[key]={
-            name:item.region || current[key]?.name || key,
-            cases:item.cases,
-            note:`${item.source||'外置数据'}：${item.note||''}`
+            name:item.name || item.region || current[key]?.name || key,
+            region:item.region || item.name || current[key]?.region || key,
+            country:item.country || current[key]?.country || '',
+            cases:Number(item.cases ?? 0),
+            deaths:item.deaths ?? null,
+            date:item.date || '',
+            source:item.source || '外置数据',
+            note:`${item.source||'外置数据'}${item.date ? ' · '+item.date : ''}：${item.note||''}`
           };
         });
         regionalCounts=current;

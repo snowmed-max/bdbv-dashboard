@@ -7,7 +7,8 @@
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "DRC 676 例中 Ituri 563 例。"
+    "note": "DRC 676 例中 Ituri 563 例。",
+    "name": "Ituri"
   },
   {
     "key": "northKivu",
@@ -17,7 +18,8 @@
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "DRC 地区级口径。"
+    "note": "DRC 地区级口径。",
+    "name": "North Kivu"
   },
   {
     "key": "southKivu",
@@ -27,7 +29,8 @@
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "DRC 地区级口径。"
+    "note": "DRC 地区级口径。",
+    "name": "South Kivu"
   },
   {
     "key": "uganda",
@@ -37,6 +40,7 @@
     "deaths": 2,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "乌干达累计 19 例，死亡 2 例。"
+    "note": "乌干达累计 19 例，死亡 2 例。",
+    "name": "Uganda"
   }
 ]
