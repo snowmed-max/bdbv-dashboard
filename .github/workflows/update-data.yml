@@ -25,7 +25,7 @@ jobs:
 
       - name: Fetch and update data
         env:
-          AUTO_APPEND_OFFICIAL: "true"
+          AUTO_APPEND_OFFICIAL: "false"
           AUTO_APPEND_MEDIA: "false"
         run: python scripts/update_data.py
 
