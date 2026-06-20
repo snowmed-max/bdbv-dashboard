@@ -98,15 +98,5 @@
     "source": "Reuters / DRC Health Minister",
     "url": "https://www.reuters.com/business/healthcare-pharmaceuticals/congo-says-933-ebola-cases-confirmed-including-245-deaths-2026-06-19/",
     "note": "DRC 卫生部长在 Ituri 简报：933 确诊、245 死亡、80 康复/出院。待 WHO 后续 DON 确认。"
-  },
-  {
-    "date": "2026-06-20",
-    "cases": 2026,
-    "deaths": 837,
-    "recovered": null,
-    "type": "official",
-    "source": "AUTO: ECDC Ebola outbreak page",
-    "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
-    "note": "自动抓取新增官方/准官方口径；建议人工复核原文后保留或修正。"
   }
 ]
