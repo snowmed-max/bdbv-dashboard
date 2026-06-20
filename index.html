@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>2026 本迪布焦病毒流行动态仪表盘</title>
-  <!-- GitHub + Netlify 自动部署版：本文件应命名为 index.html 并置于仓库根目录 -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     :root{
@@ -37,7 +36,7 @@
       <div class="card">
         <div class="badge">BDBV 2026 · 动态流行监测原型</div>
         <h1>2026 本迪布焦病毒病流行动态仪表盘</h1>
-        <div class="subtitle">用于快速查看官方通报、媒体快讯、病例与死亡趋势、重点地区扩散、接触者追踪和应对进展。页面内置截至 2026-06-20 可核验的种子数据；联网打开后可抓取公开新闻动态。真正的“全网自动抓取 + 定时更新”建议部署后端代理或 Serverless 函数。</div>
+        <div class="subtitle">用于快速查看官方通报、媒体快讯、病例与死亡趋势、重点地区扩散、接触者追踪和应对进展。数据已拆分为 data/timeseries.json、data/regional.json 和 data/news.json；网页打开时自动读取这些数据文件。联网打开后仍可抓取公开新闻动态；真正的“全网自动抓取 + 定时更新”建议部署后端代理、GitHub Actions 或 Serverless 函数。</div>
         <div class="toolbar">
           <button class="btn primary" onclick="loadGdeltNews()">抓取最新新闻动态</button>
           <button class="btn" onclick="refreshTimestamp()">刷新页面时间</button>
@@ -102,7 +101,7 @@
 
     <div class="section card">
       <h2>手动添加/修正数据点</h2>
-      <p class="small">适合每天从 WHO DON、WHO AFRO SitRep、CDC Current Situation、ECDC Communicable Disease Threats Report、DRC/Uganda 卫生部通报中录入新口径。添加后会保存在本浏览器 localStorage。</p>
+      <p class="small">临时补充数据可在这里添加，添加后只保存在当前浏览器 localStorage。正式长期更新建议直接编辑 GitHub 仓库中的 data/timeseries.json、data/regional.json 和 data/news.json。</p>
       <div class="form">
         <input id="dDate" type="date" value="2026-06-20" />
         <input id="dCases" type="number" placeholder="累计确诊" />
@@ -141,7 +140,7 @@
     <div class="footer">免责声明：本页面为公共卫生信息监测与编辑辅助工具，不替代 WHO、Africa CDC、CDC、ECDC、DRC/Uganda 卫生部等正式通报。媒体快讯数字可能早于官方 DON，但也可能因口径不同而修订。</div>
   </div>
 <script>
-const seedData = [
+const fallbackSeedData = [
   {date:'2026-05-16', cases:10, deaths:null, recovered:null, type:'official', source:'WHO DON602', url:'https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON602', note:'DRC 宣布第17次埃博拉疫情；既往 BDBV 病死率 30%–50%；无获批疫苗或特异治疗。'},
   {date:'2026-05-18', cases:8, deaths:null, recovered:null, type:'official', source:'WHO AFRO SitRep 01', url:'https://www.afro.who.int/countries/democratic-republic-of-congo/publication/ebola-bundibugyo-virus-disease-outbreak-democratic-republic-congo-uganda-weekly-external-situation', note:'数据截至 5月18日；DRC 初始实验室确诊，Uganda 出现输入病例；PHEIC。'},
   {date:'2026-05-27', cases:125, deaths:17, recovered:null, type:'official', source:'WHO DON605', url:'https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON605', note:'DRC：125 确诊、17 死亡；906 疑似、223 疑似死亡。'},
@@ -165,7 +164,7 @@ const sourceList = [
 ];
 
 // 最新可获得的“地区级”病例数，用于地图着色；如后续获得更细分卫生区数据，可直接替换。
-const regionalCounts = {
+let regionalCounts = {
   ituri: {name:'Ituri', cases:563, note:'WHO DON607：DRC 676 例中 Ituri 563 例。'},
   northKivu: {name:'North Kivu', cases:32, note:'WHO DON607 / DRC 地区级口径。'},
   southKivu: {name:'South Kivu', cases:3, note:'WHO DON607 / DRC 地区级口径。'},
@@ -189,7 +188,10 @@ const countryOutlines = {
   uganda:'M560 135 L650 118 L700 170 L678 255 L610 286 L560 262 L548 180 Z'
 };
 
-let data = JSON.parse(localStorage.getItem('bdbvData')||'null') || seedData;
+let baseData = fallbackSeedData;
+let manualData = JSON.parse(localStorage.getItem('bdbvManualData')||'[]');
+let data = [...baseData, ...manualData];
+let localNews = [];
 let trendChart, cfrChart;
 function sorted(){return [...data].sort((a,b)=>a.date.localeCompare(b.date));}
 function latest(type=null){const rows=sorted().filter(d=>!type||d.type===type);return rows[rows.length-1];}
@@ -337,17 +339,12 @@ function renderTable(filter='all'){const rows=sorted().filter(d=>filter==='all'|
 function filterRows(f,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); renderTable(f);}
 function renderWatch(){const items=[['接触者追踪','WHO DON607：DRC 已识别 5,768 名接触者，随访率约 71%–84%，是判断控制能力的核心指标。','watch'],['医疗机构感染','Reuters 6月19日引 WHO 官员：DRC 75名医务人员感染、17人死亡，提示院感与 PPE 供应是关键短板。','watch'],['地理扩散','WHO DON607：DRC 29个卫生区报告病例；AP/Africa CDC 6月18日称已达 32个卫生区。','watch'],['疫苗与治疗','BDBV 尚无获批疫苗或特异治疗；支持治疗、隔离、接触者追踪和安全安葬仍是主轴。','official']]; let html='<tr><th>指标</th><th>当前信号</th><th>状态</th></tr>'; items.forEach(i=>html+=`<tr><td>${i[0]}</td><td>${i[1]}</td><td><span class="tag ${i[2]}">${i[2]==='official'?'确认':'重点观察'}</span></td></tr>`); document.getElementById('watchTable').innerHTML=html;}
 function renderSources(){document.getElementById('sources').innerHTML=sourceList.map(s=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${s[1]}">${s[0]}</a></div><div class="news-meta">建议固定监测</div></div>`).join('');}
-function addPoint(){const p={date:dDate.value,cases:+dCases.value||null,deaths:+dDeaths.value||null,recovered:+dRecovered.value||null,type:dType.value,source:dSource.value||'手动录入',url:dUrl.value||'#',note:dNote.value||''}; data.push(p); localStorage.setItem('bdbvData',JSON.stringify(data)); renderAll();}
-function downloadData(){const blob=new Blob([JSON.stringify(sorted(),null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bundibugyo_2026_data.json'; a.click(); URL.revokeObjectURL(a.href);}
-
-function heatColor(value,max){
-  const t=max<=0?0:Math.max(0,Math.min(1,value/max));
-  const stops=[[253,230,138],[245,158,11],[239,68,68]];
-  const seg=t<0.5?0:1;
-  const localT=t<0.5?t/0.5:(t-0.5)/0.5;
-  const c1=stops[seg], c2=stops[seg+1];
-  const c=c1.map((v,i)=>Math.round(v+(c2[i]-v)*localT));
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
+function addPoint(){
+  const p={date:dDate.value,cases:+dCases.value||null,deaths:+dDeaths.value||null,recovered:+dRecovered.value||null,type:dType.value,source:dSource.value||'手动录入',url:dUrl.value||'#',note:dNote.value||''};
+  manualData.push(p);
+  localStorage.setItem('bdbvManualData',JSON.stringify(manualData));
+  data=[...baseData,...manualData];
+  renderAll();
 }
 
 function renderMap(){
@@ -399,12 +396,77 @@ function renderMap(){
   });
 }
 
+
+function renderLocalNews(){
+  if(!localNews || !localNews.length) return;
+  const box=document.getElementById('newsList');
+  box.innerHTML=localNews.map(a=>`
+    <div class="news-item">
+      <div class="news-title"><a target="_blank" href="${a.url}">${a.title}</a></div>
+      <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体口径，待官方确认':'已收录'}</div>
+      <p class="small">${a.summary||''}</p>
+    </div>`).join('');
+}
+
+async function loadExternalData(){
+  try{
+    const res=await fetch('data/timeseries.json',{cache:'no-store'});
+    if(res.ok){
+      const json=await res.json();
+      if(Array.isArray(json) && json.length){
+        baseData=json;
+        manualData=JSON.parse(localStorage.getItem('bdbvManualData')||'[]');
+        data=[...baseData,...manualData];
+      }
+    }
+  }catch(e){
+    console.warn('timeseries.json 读取失败，使用内置备用数据。', e);
+  }
+
+  try{
+    const res=await fetch('data/regional.json',{cache:'no-store'});
+    if(res.ok){
+      const json=await res.json();
+      if(Array.isArray(json) && json.length){
+        const current={...regionalCounts};
+        json.forEach(item=>{
+          const key=item.key;
+          if(!key) return;
+          current[key]={
+            name:item.region || current[key]?.name || key,
+            cases:item.cases,
+            note:`${item.source||'外置数据'}：${item.note||''}`
+          };
+        });
+        regionalCounts=current;
+      }
+    }
+  }catch(e){
+    console.warn('regional.json 读取失败，使用内置备用地区数据。', e);
+  }
+
+  try{
+    const res=await fetch('data/news.json',{cache:'no-store'});
+    if(res.ok){
+      const json=await res.json();
+      if(Array.isArray(json)){
+        localNews=json;
+      }
+    }
+  }catch(e){
+    console.warn('news.json 读取失败。', e);
+  }
+
+  renderAll();
+  renderLocalNews();
+}
+
 async function loadGdeltNews(){const box=document.getElementById('newsList'); box.innerHTML='<p class="small">正在连接 GDELT 新闻索引……</p>'; const url='https://api.gdeltproject.org/api/v2/doc/doc?query=(Bundibugyo%20OR%20%22Ebola%20Bundibugyo%22)%20(DRC%20OR%20Congo%20OR%20Uganda)&mode=artlist&format=json&maxrecords=10&sort=hybridrel';
   try{const res=await fetch(url); const json=await res.json(); const arts=json.articles||[]; if(!arts.length)throw new Error('no articles'); box.innerHTML=arts.map(a=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${a.url}">${a.title||'Untitled'}</a></div><div class="news-meta">${a.sourceCountry||''} · ${a.domain||''} · ${a.seendate||''}</div></div>`).join('');}
   catch(e){box.innerHTML='<p class="small">自动抓取失败，可能是网络、CORS 或 GDELT 暂时不可用。请使用右侧固定数据源核验，或部署后端代理。</p>';}
 }
 function renderAll(){refreshTimestamp();renderMetrics();renderCharts();renderTable();renderWatch();renderSources();renderMap();}
-renderAll();
+loadExternalData();
 </script>
 </body>
 </html>

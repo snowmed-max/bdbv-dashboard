@@ -1,37 +1,76 @@
-# 2026 本迪布焦病毒病流行动态仪表盘
+# 2026 本迪布焦病毒病流行动态仪表盘｜数据外置版
 
-这是一个用于展示 2026 年本迪布焦病毒病（Bundibugyo virus disease, BDBV）流行动态的静态网页项目，可部署到 GitHub + Netlify，实现自动部署。
+这是 GitHub + Netlify 自动部署版本。网页主体在 `index.html`，疫情数据放在 `data/` 目录。
 
-## 文件说明
+## 文件结构
 
-- `index.html`：网页主文件，Netlify / GitHub Pages / Cloudflare Pages 会默认读取它作为首页。
-- `netlify.toml`：Netlify 部署配置文件。
-- `.gitignore`：忽略系统临时文件。
+```text
+index.html
+netlify.toml
+data/
+  timeseries.json
+  regional.json
+  news.json
+```
 
-## 最简单的部署方式：GitHub + Netlify
+## 如何更新病例时间序列
 
-1. 在 GitHub 新建一个仓库，例如 `bdbv-dashboard`。
-2. 上传本项目中的全部文件。
-3. 登录 Netlify。
-4. 选择 `Add new site` → `Import an existing project`。
-5. 选择 GitHub，并授权 Netlify 访问该仓库。
-6. 选择 `bdbv-dashboard` 仓库。
-7. Build command 留空。
-8. Publish directory 填 `.`，或者保持默认。
-9. 点击 Deploy。
-
-之后每次你修改 GitHub 仓库里的 `index.html`，Netlify 会自动重新部署网站。
-
-## 后续动态化建议
-
-当前版本的数据主要写在 `index.html` 内。下一步可以把数据拆成：
+打开：
 
 ```text
 data/timeseries.json
+```
+
+在数组末尾添加一条新数据，例如：
+
+```json
+{
+  "date": "2026-06-21",
+  "cases": 960,
+  "deaths": 250,
+  "recovered": 95,
+  "type": "official",
+  "source": "WHO / Ministry update",
+  "url": "https://example.com",
+  "note": "新增官方通报数据"
+}
+```
+
+注意：
+- 每条数据之间要用英文逗号分隔。
+- 最后一条数据后面不要加逗号。
+- `type` 建议使用 `official` 或 `media`。
+- 媒体快讯数字建议在 `note` 里标注“待官方确认”。
+
+## 如何更新地区地图
+
+打开：
+
+```text
 data/regional.json
+```
+
+修改对应地区的 `cases` 数字即可。
+
+当前支持的 `key` 包括：
+
+```text
+ituri
+northKivu
+southKivu
+uganda
+```
+
+## 如何更新新闻动态
+
+打开：
+
+```text
 data/news.json
 ```
 
-再用 GitHub Actions 定时抓取 WHO、CDC、ECDC、GDELT 等来源，自动更新 JSON 数据。
+添加新闻条目即可。网页会在“最新新闻动态”板块显示这些内容。
 
-测试 GitHub 自动部署。
+## 自动部署
+
+修改并提交任何文件后，Netlify 会自动从 GitHub 部署最新版本。
