@@ -1,46 +1,46 @@
 [
   {
     "key": "ituri",
-    "name": "Ituri",
     "region": "Ituri",
     "country": "DRC",
     "cases": 563,
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "WHO DON607 地区级口径：DRC 676 例中 Ituri 563 例。"
+    "note": "DRC 676 例中 Ituri 563 例。",
+    "name": "Ituri"
   },
   {
     "key": "northKivu",
-    "name": "North Kivu",
     "region": "North Kivu",
     "country": "DRC",
     "cases": 32,
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "WHO DON607 / DRC 地区级口径。"
+    "note": "DRC 地区级口径。",
+    "name": "North Kivu"
   },
   {
     "key": "southKivu",
-    "name": "South Kivu",
     "region": "South Kivu",
     "country": "DRC",
     "cases": 3,
     "deaths": null,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "WHO DON607 / DRC 地区级口径。"
+    "note": "DRC 地区级口径。",
+    "name": "South Kivu"
   },
   {
     "key": "uganda",
-    "name": "Uganda",
     "region": "Uganda",
     "country": "Uganda",
     "cases": 19,
     "deaths": 2,
     "date": "2026-06-10",
     "source": "WHO DON607",
-    "note": "WHO DON607：乌干达累计 19 例，死亡 2 例。"
+    "note": "乌干达累计 19 例，死亡 2 例。",
+    "name": "Uganda"
   }
 ]
