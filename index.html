@@ -465,37 +465,53 @@ function renderMap(){
 function renderCandidates(){
   const table=document.getElementById('candidateTable');
   if(!table) return;
-  const rows=(candidateData||[]).slice(0,20);
-  let html='<tr><th>日期</th><th>来源</th><th>候选数字</th><th>可信度/警告</th><th>状态</th><th>链接</th></tr>';
-  if(!rows.length){
-    html+='<tr><td colspan="6" class="small">暂无候选数据。</td></tr>';
+  try{
+    const rows=(candidateData||[]).slice(0,20);
+    let out='<tr><th>日期</th><th>来源</th><th>候选数字</th><th>可信度/警告</th><th>状态</th><th>链接</th></tr>';
+    if(!rows.length){
+      out+='<tr><td colspan="6" class="small">暂无候选数据。</td></tr>';
+    }
+    rows.forEach(d=>{
+      const nums=`确诊 ${fmt(d.cases)} / 死亡 ${fmt(d.deaths)} / 康复 ${fmt(d.recovered)}`;
+      const warnings=Array.isArray(d.warnings)?d.warnings.join('; '):(d.warnings||'');
+      out+=`<tr><td>${d.date||''}</td><td>${d.source||''}</td><td>${nums}</td><td>${d.confidence||''}<br><span class="small">${warnings}</span></td><td>${d.status||''}</td><td><a target="_blank" href="${d.url||'#'}">原文</a></td></tr>`;
+    });
+    table.innerHTML=out;
+  }catch(e){
+    table.innerHTML='<tr><td colspan="6" class="small">候选数据渲染失败，请检查 candidates.json 格式。</td></tr>';
+    console.error('renderCandidates failed', e);
   }
-  rows.forEach(d=>{
-    const nums=`确诊 ${fmt(d.cases)} / 死亡 ${fmt(d.deaths)} / 康复 ${fmt(d.recovered)}`;
-    const warnings=Array.isArray(d.warnings)?d.warnings.join('; '):(d.warnings||'');
-    html+=`<tr><td>${d.date||''}</td><td>${d.source||''}</td><td>${nums}</td><td>${d.confidence||''}<br><span class="small">${warnings}</span></td><td>${d.status||''}</td><td><a target="_blank" href="${d.url||'#'}">原文</a></td></tr>`;
-  });
-  table.innerHTML=html;
 }
 
 function renderLocalNews(){
   const box=document.getElementById('newsList');
   if(!box) return;
-
-  if(!localNews || !localNews.length){
-    box.innerHTML='<p class="small">暂未读取到新闻数据。请检查 data/news.json 是否存在，或到 GitHub Actions 手动运行一次自动更新。</p>';
-    return;
+  try{
+    if(!localNews || !localNews.length){
+      box.innerHTML='<p class="small">暂未读取到新闻数据。请检查 data/news.json 是否存在，或到 GitHub Actions 手动运行一次自动更新。</p>';
+      return;
+    }
+    box.innerHTML=localNews.slice(0,12).map(a=>`
+      <div class="news-item">
+        <div class="news-title"><a target="_blank" href="${a.url||'#'}">${a.title || 'Untitled'}</a></div>
+        <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体/候选线索，不进入正式曲线':(a.status||'已收录')}</div>
+        <p class="small">${a.summary||''}</p>
+      </div>`).join('');
+  }catch(e){
+    box.innerHTML='<p class="small">新闻数据渲染失败，请检查 news.json 格式。</p>';
+    console.error('renderLocalNews failed', e);
   }
-
-  box.innerHTML=localNews.slice(0,12).map(a=>`
-    <div class="news-item">
-      <div class="news-title"><a target="_blank" href="${a.url}">${a.title || 'Untitled'}</a></div>
-      <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体/候选线索，不进入正式曲线':(a.status||'已收录')}</div>
-      <p class="small">${a.summary||''}</p>
-    </div>`).join('');
 }
 
 async function loadExternalData(){
+  // 先用内置/现有数据渲染页面，避免任何外部 JSON 读取失败导致页面空白。
+  try{
+    data=[...baseData,...manualData];
+    renderAll();
+  }catch(e){
+    console.error('initial render failed', e);
+  }
+
   try{
     const res=await fetch('data/timeseries.json',{cache:'no-store'});
     if(res.ok){
@@ -549,8 +565,25 @@ async function loadExternalData(){
     console.warn('news.json 读取失败。', e);
   }
 
-  renderAll();
-  renderLocalNews();
+  try{
+    const res=await fetch('data/candidates.json',{cache:'no-store'});
+    if(res.ok){
+      const json=await res.json();
+      if(Array.isArray(json)){
+        candidateData=json;
+      }
+    }
+  }catch(e){
+    console.warn('candidates.json 读取失败。', e);
+  }
+
+  try{
+    renderAll();
+    renderLocalNews();
+    renderCandidates();
+  }catch(e){
+    console.error('final render failed', e);
+  }
 }
 
 
@@ -561,25 +594,32 @@ async function refreshNewsFromJson(){
     const res=await fetch('data/news.json?ts='+Date.now(),{cache:'no-store'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const json=await res.json();
-    if(Array.isArray(json)){
-      localNews=json;
-      renderLocalNews();
-      return;
-    }
-    throw new Error('news.json 不是数组格式');
+    if(!Array.isArray(json)) throw new Error('news.json 不是数组格式');
+    localNews=json;
+    renderLocalNews();
   }catch(e){
+    console.error('refreshNewsFromJson failed', e);
     if(box){
       box.innerHTML='<p class="small">读取 data/news.json 失败。请检查 GitHub 仓库中 data/news.json 是否存在、JSON 格式是否正确，或等待 Netlify 重新部署完成。</p>';
     }
   }
 }
 
-async async function loadGdeltNews(){
+async function loadGdeltNews(){
   // 已弃用：前端不再直接访问 GDELT，避免 CORS 和网络不稳定。
   // 新闻数据由 GitHub Actions 写入 data/news.json，本函数仅刷新该 JSON。
   return refreshNewsFromJson();
 }
-function renderAll(){refreshTimestamp();renderMetrics();renderCharts();renderTable();renderWatch();renderSources();renderMap();renderCandidates();}
+function renderAll(){
+  try{ refreshTimestamp(); }catch(e){ console.warn(e); }
+  try{ renderMetrics(); }catch(e){ console.error('renderMetrics failed', e); }
+  try{ renderCharts(); }catch(e){ console.error('renderCharts failed', e); }
+  try{ renderTable(); }catch(e){ console.error('renderTable failed', e); }
+  try{ renderWatch(); }catch(e){ console.error('renderWatch failed', e); }
+  try{ renderSources(); }catch(e){ console.error('renderSources failed', e); }
+  try{ renderMap(); }catch(e){ console.error('renderMap failed', e); }
+  try{ renderCandidates(); }catch(e){ console.error('renderCandidates failed', e); }
+}
 loadExternalData();
 </script>
 </body>
