@@ -217,15 +217,12 @@ const sourceList = [
   ['AP search','https://apnews.com/search?q=Bundibugyo%20Ebola'],
   ['GDELT global news API','https://api.gdeltproject.org/api/v2/doc/doc?query=Bundibugyo%20Ebola&mode=artlist&format=json']
 ];
-
-// 最新可获得的“地区级”病例数，用于地图着色；如后续获得更细分卫生区数据，可直接替换。
 let regionalCounts = {
   ituri: {name:'Ituri', cases:563, note:'WHO DON607：DRC 676 例中 Ituri 563 例。'},
   northKivu: {name:'North Kivu', cases:32, note:'WHO DON607 / DRC 地区级口径。'},
   southKivu: {name:'South Kivu', cases:3, note:'WHO DON607 / DRC 地区级口径。'},
   uganda: {name:'Uganda（已报告跨境病例）', cases:19, note:'WHO DON607：乌干达累计 19 例。'}
 };
-
 const mapRegions = [
   {id:'bas-ue', cls:'base-region', name:'Bas-Uele', d:'M130 110 L235 90 L285 120 L252 176 L150 172 L112 142 Z', label:[160,135]},
   {id:'haut-ue', cls:'base-region', name:'Haut-Uele', d:'M235 90 L380 85 L420 122 L412 174 L300 170 L252 176 L285 120 Z', label:[324,132]},
@@ -237,390 +234,284 @@ const mapRegions = [
   {id:'tanganyika', cls:'base-region', name:'Tanganyika', d:'M210 378 L322 378 L346 430 L336 470 L220 472 L176 426 Z', label:[240,435]},
   {id:'uganda', cls:'region', key:'uganda', name:'Uganda', d:'M560 135 L650 118 L700 170 L678 255 L610 286 L560 262 L548 180 Z', label:[624,208], countPos:[624,226]}
 ];
-
 const countryOutlines = {
   drc:'M110 142 L130 110 L235 90 L380 85 L560 135 L548 180 L560 262 L505 357 L430 442 L336 470 L220 472 L176 426 L135 250 Z',
   uganda:'M560 135 L650 118 L700 170 L678 255 L610 286 L560 262 L548 180 Z'
 };
 
 let baseData = fallbackSeedData;
-let manualData = JSON.parse(localStorage.getItem('bdbvManualData')||'[]');
-let data = [...baseData, ...manualData];
+let manualData = [];
+let data = [];
 let localNews = [];
 let candidateData = [];
-let trendChart, cfrChart;
-function sorted(){return [...data].sort((a,b)=>a.date.localeCompare(b.date));}
-function latest(type=null){const rows=sorted().filter(d=>!type||d.type===type);return rows[rows.length-1];}
-function fmt(n){return n===null||n===undefined?'—':Number(n).toLocaleString('zh-CN')}
-function cfr(d){return d.deaths&&d.cases?((d.deaths/d.cases)*100).toFixed(1)+'%':'—'}
-function refreshTimestamp(){document.getElementById('timeNow').textContent='本地查看时间：'+new Date().toLocaleString('zh-CN',{hour12:false});}
-function renderMetrics(){const off=latest('official'), med=latest('media'), base=med&&(!off||med.date>=off.date)?med:off; const officialNote=off?`${off.source} · ${off.date}`:'无'; const mediaNote=med?`${med.source} · ${med.date}`:'无';
-  document.getElementById('metrics').innerHTML = `
+let trendChart = null;
+let cfrChart = null;
+
+function showRuntimeError(label, err){
+  console.error(label, err);
+  const box=document.getElementById('runtimeError');
+  if(box){
+    box.style.display='block';
+    box.textContent='页面脚本提示：'+label+'\n'+(err && (err.stack || err.message) ? (err.stack || err.message) : String(err));
+  }
+}
+
+function fmt(n){
+  return n===null||n===undefined||n===''||Number.isNaN(Number(n)) ? '—' : Number(n).toLocaleString('zh-CN');
+}
+function sorted(){
+  return [...data].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+function latest(type=null){
+  const rows=sorted().filter(d=>!type||d.type===type);
+  return rows[rows.length-1] || null;
+}
+function cfr(d){
+  return d && d.deaths && d.cases ? ((d.deaths/d.cases)*100).toFixed(1)+'%' : '—';
+}
+function refreshTimestamp(){
+  const el=document.getElementById('timeNow');
+  if(el) el.textContent='本地查看时间：'+new Date().toLocaleString('zh-CN',{hour12:false});
+}
+function syncData(){
+  try{ manualData=JSON.parse(localStorage.getItem('bdbvManualData')||'[]'); }catch(e){ manualData=[]; }
+  data=[...baseData,...manualData];
+}
+
+function renderMetrics(){
+  const box=document.getElementById('metrics');
+  if(!box) return;
+  const off=latest('official');
+  const med=latest('media');
+  const officialNote=off?`${off.source} · ${off.date}`:'无';
+  const mediaNote=med?`${med.source} · ${med.date}`:'无';
+  box.innerHTML=`
     <div class="metric"><div class="label">WHO 正式累计确诊</div><div class="num">${fmt(off?.cases)}</div><div class="note">${officialNote}</div></div>
     <div class="metric"><div class="label">WHO 正式累计死亡</div><div class="num">${fmt(off?.deaths)}</div><div class="note">CFR ${cfr(off||{})}</div></div>
     <div class="metric"><div class="label">媒体快讯确诊</div><div class="num">${fmt(med?.cases)}</div><div class="note">${mediaNote}</div></div>
     <div class="metric"><div class="label">媒体快讯死亡/康复</div><div class="num">${fmt(med?.deaths)} / ${fmt(med?.recovered)}</div><div class="note">不进入正式曲线</div></div>`;
 }
-function renderCharts(){
-  const rows=sorted();
 
-  // 将不连续通报日期转换为连续日期序列，并在两个已知数据点之间线性插值。
-  // 注意：插值曲线用于观察趋势，不代表每天都有真实新增报告。
+function interpolateRows(rows){
+  if(!rows.length) return [];
   const dayMs=24*60*60*1000;
   const dateObj=s=>new Date(s+'T00:00:00');
   const iso=d=>d.toISOString().slice(0,10);
   const valueAt=(date,key)=>{
     const exact=rows.find(r=>r.date===date);
     if(exact && exact[key]!==null && exact[key]!==undefined) return exact[key];
-
     const current=dateObj(date).getTime();
     const before=[...rows].reverse().find(r=>r[key]!==null && r[key]!==undefined && dateObj(r.date).getTime()<current);
     const after=rows.find(r=>r[key]!==null && r[key]!==undefined && dateObj(r.date).getTime()>current);
     if(!before || !after) return null;
-
-    const t0=dateObj(before.date).getTime();
-    const t1=dateObj(after.date).getTime();
+    const t0=dateObj(before.date).getTime(), t1=dateObj(after.date).getTime();
     const ratio=(current-t0)/(t1-t0);
     return +(before[key]+(after[key]-before[key])*ratio).toFixed(1);
   };
-
-  const start=dateObj(rows[0].date);
-  const end=dateObj(rows[rows.length-1].date);
-  const continuousRows=[];
+  const start=dateObj(rows[0].date), end=dateObj(rows[rows.length-1].date);
+  const out=[];
   for(let t=start.getTime(); t<=end.getTime(); t+=dayMs){
     const d=iso(new Date(t));
-    continuousRows.push({
-      date:d,
-      cases:valueAt(d,'cases'),
-      deaths:valueAt(d,'deaths'),
-      recovered:valueAt(d,'recovered'),
-      observed:rows.some(r=>r.date===d)
-    });
+    out.push({date:d,cases:valueAt(d,'cases'),deaths:valueAt(d,'deaths'),recovered:valueAt(d,'recovered'),observed:rows.some(r=>r.date===d)});
   }
+  return out;
+}
 
+function renderCharts(){
+  if(typeof Chart==='undefined'){ throw new Error('Chart.js 未加载。请检查网络或 CDN。'); }
+  const rows=sorted();
+  if(!rows.length) return;
+  const continuousRows=interpolateRows(rows);
   const labels=continuousRows.map(d=>d.date.slice(5));
   const cases=continuousRows.map(d=>d.cases);
   const deaths=continuousRows.map(d=>d.deaths);
   const rec=continuousRows.map(d=>d.recovered);
-
   const observedCases=continuousRows.map(d=>d.observed?d.cases:null);
   const observedDeaths=continuousRows.map(d=>d.observed?d.deaths:null);
   const observedRecovered=continuousRows.map(d=>d.observed?d.recovered:null);
 
-  // 结局趋势组合图：过滤掉病死率为 0/空值的数据点，同时保留可用的康复数据。
-  // 左轴：累计康复/出院人数；右轴：表观病死率与康复占累计病例比例。
-  const outcomeRows=rows
-    .map(d=>({
-      date:d.date,
-      cfr:d.deaths && d.cases ? +(d.deaths/d.cases*100).toFixed(1) : null,
-      recovered:(d.recovered!==null && d.recovered!==undefined && d.recovered>0) ? d.recovered : null,
-      recoveryRate:(d.recovered && d.cases) ? +(d.recovered/d.cases*100).toFixed(1) : null
-    }))
-    .filter(d=>d.cfr!==null || d.recovered!==null || d.recoveryRate!==null);
-  const outcomeLabels=outcomeRows.map(d=>d.date);
-  const cfrs=outcomeRows.map(d=>d.cfr);
-  const recoveredCounts=outcomeRows.map(d=>d.recovered);
-  const recoveryRates=outcomeRows.map(d=>d.recoveryRate);
+  const outcomeRows=rows.map(d=>({
+    date:d.date,
+    cfr:d.deaths && d.cases ? +(d.deaths/d.cases*100).toFixed(1) : null,
+    recovered:(d.recovered!==null && d.recovered!==undefined && d.recovered>0) ? d.recovered : null,
+    recoveryRate:(d.recovered && d.cases) ? +(d.recovered/d.cases*100).toFixed(1) : null
+  })).filter(d=>d.cfr!==null || d.recovered!==null || d.recoveryRate!==null);
 
-  if(trendChart)trendChart.destroy();
-  if(cfrChart)cfrChart.destroy();
+  if(trendChart) trendChart.destroy();
+  if(cfrChart) cfrChart.destroy();
 
-  trendChart=new Chart(document.getElementById('trendChart'),{
-    type:'line',
-    data:{
-      labels,
-      datasets:[
+  const trendEl=document.getElementById('trendChart');
+  const cfrEl=document.getElementById('cfrChart');
+  if(trendEl){
+    trendChart=new Chart(trendEl,{
+      type:'line',
+      data:{labels,datasets:[
         {label:'累计确诊（插值趋势）',data:cases,tension:.35,pointRadius:0,borderWidth:2},
         {label:'累计死亡（插值趋势）',data:deaths,tension:.35,pointRadius:0,borderWidth:2},
         {label:'康复/出院（插值趋势）',data:rec,tension:.35,pointRadius:0,borderWidth:2},
         {label:'确诊原始通报点',data:observedCases,showLine:false,pointRadius:4,pointHoverRadius:6},
         {label:'死亡原始通报点',data:observedDeaths,showLine:false,pointRadius:4,pointHoverRadius:6},
         {label:'康复原始通报点',data:observedRecovered,showLine:false,pointRadius:4,pointHoverRadius:6}
-      ]
-    },
-    options:{
-      responsive:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{labels:{color:'#cbd5e1'}},
-        tooltip:{
-          callbacks:{
-            afterBody:(items)=>{
-              const idx=items[0].dataIndex;
-              return continuousRows[idx].observed ? '原始通报日期' : '两次通报之间的线性插值';
-            }
-          }
-        }
-      },
-      scales:{
-        x:{ticks:{color:'#94a3b8',maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{color:'rgba(148,163,184,.12)'}},
-        y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(148,163,184,.12)'}}
-      }
-    }
-  });
-
-  cfrChart=new Chart(document.getElementById('cfrChart'),{
-    data:{
-      labels:outcomeLabels,
-      datasets:[
-        {type:'bar',label:'累计康复/出院',data:recoveredCounts,yAxisID:'yCount',borderWidth:1},
-        {type:'line',label:'表观病死率 %',data:cfrs,yAxisID:'yRate',tension:.25,pointRadius:4,spanGaps:true},
-        {type:'line',label:'康复占累计病例 %',data:recoveryRates,yAxisID:'yRate',tension:.25,pointRadius:4,spanGaps:true}
-      ]
-    },
-    options:{
-      responsive:true,
-      interaction:{mode:'index',intersect:false},
-      plugins:{
-        legend:{labels:{color:'#cbd5e1'}},
-        tooltip:{
-          callbacks:{
-            label:(ctx)=>{
-              const label=ctx.dataset.label||'';
-              if(ctx.parsed.y===null) return label+': 暂无数据';
-              return label.includes('%') ? `${label}: ${ctx.parsed.y}%` : `${label}: ${fmt(ctx.parsed.y)}`;
-            }
-          }
-        }
-      },
-      scales:{
-        x:{ticks:{color:'#94a3b8'},grid:{display:false}},
-        yCount:{type:'linear',position:'left',beginAtZero:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(148,163,184,.12)'},title:{display:true,text:'康复/出院人数',color:'#cbd5e1'}},
-        yRate:{type:'linear',position:'right',beginAtZero:true,ticks:{color:'#94a3b8',callback:(v)=>v+'%'},grid:{drawOnChartArea:false},title:{display:true,text:'比例',color:'#cbd5e1'}}
-      }
-    }
-  });
-}
-function renderTable(filter='all'){const rows=sorted().filter(d=>filter==='all'||d.type===filter); let html='<tr><th>日期</th><th>确诊</th><th>死亡</th><th>康复</th><th>类型</th><th>来源</th><th>备注</th></tr>'; rows.forEach(d=>{html+=`<tr><td>${d.date}</td><td>${fmt(d.cases)}</td><td>${fmt(d.deaths)}</td><td>${fmt(d.recovered)}</td><td><span class="tag ${d.type}">${d.type==='official'?'官方/准官方':'媒体最新'}</span></td><td><a target="_blank" href="${d.url}">${d.source}</a></td><td>${d.note||''}</td></tr>`}); document.getElementById('dataTable').innerHTML=html;}
-function filterRows(f,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); el.classList.add('active'); renderTable(f);}
-function renderWatch(){const items=[['接触者追踪','WHO DON607：DRC 已识别 5,768 名接触者，随访率约 71%–84%，是判断控制能力的核心指标。','watch'],['医疗机构感染','Reuters 6月19日引 WHO 官员：DRC 75名医务人员感染、17人死亡，提示院感与 PPE 供应是关键短板。','watch'],['地理扩散','WHO DON607：DRC 29个卫生区报告病例；AP/Africa CDC 6月18日称已达 32个卫生区。','watch'],['疫苗与治疗','BDBV 尚无获批疫苗或特异治疗；支持治疗、隔离、接触者追踪和安全安葬仍是主轴。','official']]; let html='<tr><th>指标</th><th>当前信号</th><th>状态</th></tr>'; items.forEach(i=>html+=`<tr><td>${i[0]}</td><td>${i[1]}</td><td><span class="tag ${i[2]}">${i[2]==='official'?'确认':'重点观察'}</span></td></tr>`); document.getElementById('watchTable').innerHTML=html;}
-function renderSources(){document.getElementById('sources').innerHTML=sourceList.map(s=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${s[1]}">${s[0]}</a></div><div class="news-meta">建议固定监测</div></div>`).join('');}
-function addPoint(){
-  const p={date:dDate.value,cases:+dCases.value||null,deaths:+dDeaths.value||null,recovered:+dRecovered.value||null,type:dType.value,source:dSource.value||'手动录入',url:dUrl.value||'#',note:dNote.value||''};
-  manualData.push(p);
-  localStorage.setItem('bdbvManualData',JSON.stringify(manualData));
-  data=[...baseData,...manualData];
-  renderAll();
+      ]},
+      options:{responsive:true,maintainAspectRatio:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#cbd5e1'}},tooltip:{callbacks:{afterBody:(items)=>continuousRows[items[0].dataIndex].observed?'原始通报日期':'两次通报之间的线性插值'}}},scales:{x:{ticks:{color:'#94a3b8',maxRotation:0,autoSkip:true,maxTicksLimit:10},grid:{color:'rgba(148,163,184,.12)'}},y:{ticks:{color:'#94a3b8'},grid:{color:'rgba(148,163,184,.12)'}}}}
+    });
+  }
+  if(cfrEl){
+    cfrChart=new Chart(cfrEl,{
+      data:{labels:outcomeRows.map(d=>d.date),datasets:[
+        {type:'bar',label:'累计康复/出院',data:outcomeRows.map(d=>d.recovered),yAxisID:'yCount',borderWidth:1},
+        {type:'line',label:'表观病死率 %',data:outcomeRows.map(d=>d.cfr),yAxisID:'yRate',tension:.25,pointRadius:4,spanGaps:true},
+        {type:'line',label:'康复占累计病例 %',data:outcomeRows.map(d=>d.recoveryRate),yAxisID:'yRate',tension:.25,pointRadius:4,spanGaps:true}
+      ]},
+      options:{responsive:true,interaction:{mode:'index',intersect:false},plugins:{legend:{labels:{color:'#cbd5e1'}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},yCount:{type:'linear',position:'left',beginAtZero:true,ticks:{color:'#94a3b8'},grid:{color:'rgba(148,163,184,.12)'},title:{display:true,text:'康复/出院人数',color:'#cbd5e1'}},yRate:{type:'linear',position:'right',beginAtZero:true,ticks:{color:'#94a3b8',callback:(v)=>v+'%'},grid:{drawOnChartArea:false},title:{display:true,text:'比例',color:'#cbd5e1'}}}}
+    });
+  }
 }
 
+function renderTable(filter='all'){
+  const table=document.getElementById('dataTable');
+  if(!table) return;
+  const rows=sorted().filter(d=>filter==='all'||d.type===filter);
+  let out='<tr><th>日期</th><th>确诊</th><th>死亡</th><th>康复</th><th>类型</th><th>来源</th><th>备注</th></tr>';
+  rows.forEach(d=>{ out+=`<tr><td>${d.date}</td><td>${fmt(d.cases)}</td><td>${fmt(d.deaths)}</td><td>${fmt(d.recovered)}</td><td><span class="tag ${d.type}">${d.type==='official'?'官方/准官方':'媒体最新'}</span></td><td><a target="_blank" href="${d.url||'#'}">${d.source||''}</a></td><td>${d.note||''}</td></tr>`; });
+  table.innerHTML=out;
+}
+function filterRows(f,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  renderTable(f);
+}
+
+function renderWatch(){
+  const table=document.getElementById('watchTable');
+  if(!table) return;
+  const items=[
+    ['WHO 后续通报','观察是否发布新的 DON 或 WHO AFRO SitRep；正式曲线仅在 WHO/WHO AFRO 确认后更新。','watch'],
+    ['媒体快讯','Reuters/AP 等只作为早期提醒，不进入正式曲线。','watch'],
+    ['地区扩散','仅在 WHO/WHO AFRO 或 DRC 卫生部明确地区数据后更新地图。','watch'],
+    ['病例结局','死亡和康复受结局延迟影响，不宜按单日快讯过度解读。','official']
+  ];
+  let out='<tr><th>指标</th><th>当前信号</th><th>状态</th></tr>';
+  items.forEach(i=>out+=`<tr><td>${i[0]}</td><td>${i[1]}</td><td><span class="tag ${i[2]}">${i[2]==='official'?'确认':'重点观察'}</span></td></tr>`);
+  table.innerHTML=out;
+}
+function renderSources(){
+  const box=document.getElementById('sources');
+  if(!box) return;
+  box.innerHTML=sourceList.map(s=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${s[1]}">${s[0]}</a></div><div class="news-meta">监测/核验</div></div>`).join('');
+}
+
+function heatColor(value,max){
+  const t=max<=0?0:Math.max(0,Math.min(1,value/max));
+  const stops=[[253,230,138],[245,158,11],[239,68,68]];
+  const seg=t<0.5?0:1, localT=t<0.5?t/0.5:(t-0.5)/0.5;
+  const c1=stops[seg], c2=stops[seg+1];
+  const c=c1.map((v,i)=>Math.round(v+(c2[i]-v)*localT));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
 function renderMap(){
   const svg=document.getElementById('choroplethMap');
   if(!svg) return;
-
   const tooltip=document.getElementById('mapTooltip');
   const legendText=document.getElementById('mapLegendText');
-
-  const regionValues=Object.values(regionalCounts)
-    .map(d=>Number(d.cases))
-    .filter(v=>!Number.isNaN(v) && v>=0);
-  const max=regionValues.length ? Math.max(...regionValues) : 1;
-  const min=regionValues.length ? Math.min(...regionValues) : 0;
-
-  if(legendText){
-    legendText.textContent=`地区着色基于 data/regional.json：最少 ${fmt(min)} 例，最多 ${fmt(max)} 例。`;
-  }
-
-  const svgIds={
-    ituri:'ituri',
-    northKivu:'north-kivu',
-    southKivu:'south-kivu',
-    uganda:'uganda'
-  };
-
-  Object.keys(svgIds).forEach(key=>{
-    const el=document.getElementById(svgIds[key]);
+  const vals=Object.values(regionalCounts).map(d=>Number(d.cases)).filter(v=>!Number.isNaN(v)&&v>=0);
+  const max=vals.length?Math.max(...vals):1, min=vals.length?Math.min(...vals):0;
+  if(legendText) legendText.textContent=`地区着色基于最新可获得的地区级病例数：最少 ${fmt(min)} 例，最多 ${fmt(max)} 例。`;
+  const ids={ituri:'ituri',northKivu:'north-kivu',southKivu:'south-kivu',uganda:'uganda'};
+  Object.keys(ids).forEach(key=>{
+    const el=document.getElementById(ids[key]);
     const info=regionalCounts[key];
-    if(!el || !info) return;
-
-    const cases=Number(info.cases ?? 0);
-    const displayName=info.name || info.region || key;
-    const note=info.note || '';
-
+    if(!el||!info) return;
+    const cases=Number(info.cases||0), name=info.name||info.region||key, note=info.note||'';
     el.setAttribute('fill', heatColor(cases,max));
-    el.dataset.name=displayName;
-    el.dataset.cases=String(cases);
-    el.dataset.note=note;
-
+    el.dataset.name=name; el.dataset.cases=String(cases); el.dataset.note=note;
     const countLabel=document.getElementById(key+'Count');
     if(countLabel) countLabel.textContent=`${fmt(cases)} 例`;
   });
-
   svg.querySelectorAll('.region').forEach(el=>{
-    el.onmouseenter=()=>{
-      const note=el.dataset.note ? `<br>${el.dataset.note}` : '';
-      if(tooltip){
-        tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong>${note}`;
-      }
-    };
-    el.onmouseleave=()=>{
-      if(tooltip){
-        tooltip.textContent='将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。';
-      }
-    };
+    el.onmouseenter=()=>{ if(tooltip) tooltip.innerHTML=`<strong>${el.dataset.name}</strong><br>最新地区级病例数：<strong>${fmt(el.dataset.cases)}</strong>${el.dataset.note?'<br>'+el.dataset.note:''}`; };
+    el.onmouseleave=()=>{ if(tooltip) tooltip.textContent='将鼠标移动到区域上可查看病例数。当前地区级数据来自 data/regional.json；如读取失败，则使用内置备用数据。'; };
   });
-}
-
-
-
-function renderCandidates(){
-  const table=document.getElementById('candidateTable');
-  if(!table) return;
-  try{
-    const rows=(candidateData||[]).slice(0,20);
-    let out='<tr><th>日期</th><th>来源</th><th>候选数字</th><th>可信度/警告</th><th>状态</th><th>链接</th></tr>';
-    if(!rows.length){
-      out+='<tr><td colspan="6" class="small">暂无候选数据。</td></tr>';
-    }
-    rows.forEach(d=>{
-      const nums=`确诊 ${fmt(d.cases)} / 死亡 ${fmt(d.deaths)} / 康复 ${fmt(d.recovered)}`;
-      const warnings=Array.isArray(d.warnings)?d.warnings.join('; '):(d.warnings||'');
-      out+=`<tr><td>${d.date||''}</td><td>${d.source||''}</td><td>${nums}</td><td>${d.confidence||''}<br><span class="small">${warnings}</span></td><td>${d.status||''}</td><td><a target="_blank" href="${d.url||'#'}">原文</a></td></tr>`;
-    });
-    table.innerHTML=out;
-  }catch(e){
-    table.innerHTML='<tr><td colspan="6" class="small">候选数据渲染失败，请检查 candidates.json 格式。</td></tr>';
-    console.error('renderCandidates failed', e);
-  }
 }
 
 function renderLocalNews(){
   const box=document.getElementById('newsList');
   if(!box) return;
-  try{
-    if(!localNews || !localNews.length){
-      box.innerHTML='<p class="small">暂未读取到新闻数据。请检查 data/news.json 是否存在，或到 GitHub Actions 手动运行一次自动更新。</p>';
-      return;
-    }
-    box.innerHTML=localNews.slice(0,12).map(a=>`
-      <div class="news-item">
-        <div class="news-title"><a target="_blank" href="${a.url||'#'}">${a.title || 'Untitled'}</a></div>
-        <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体/候选线索，不进入正式曲线':(a.status||'已收录')}</div>
-        <p class="small">${a.summary||''}</p>
-      </div>`).join('');
-  }catch(e){
-    box.innerHTML='<p class="small">新闻数据渲染失败，请检查 news.json 格式。</p>';
-    console.error('renderLocalNews failed', e);
-  }
+  if(!localNews||!localNews.length){ box.innerHTML='<p class="small">暂未读取到新闻数据。请检查 data/news.json，或到 GitHub Actions 手动运行一次自动更新。</p>'; return; }
+  box.innerHTML=localNews.slice(0,12).map(a=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${a.url||'#'}">${a.title||'Untitled'}</a></div><div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体/候选线索，不进入正式曲线':(a.status||'已收录')}</div><p class="small">${a.summary||''}</p></div>`).join('');
+}
+function renderCandidates(){
+  const table=document.getElementById('candidateTable');
+  if(!table) return;
+  const rows=(candidateData||[]).slice(0,20);
+  let out='<tr><th>日期</th><th>来源</th><th>候选数字</th><th>可信度/警告</th><th>状态</th><th>链接</th></tr>';
+  if(!rows.length) out+='<tr><td colspan="6" class="small">暂无候选数据。</td></tr>';
+  rows.forEach(d=>{
+    const nums=`确诊 ${fmt(d.cases)} / 死亡 ${fmt(d.deaths)} / 康复 ${fmt(d.recovered)}`;
+    const warnings=Array.isArray(d.warnings)?d.warnings.join('; '):(d.warnings||'');
+    out+=`<tr><td>${d.date||''}</td><td>${d.source||''}</td><td>${nums}</td><td>${d.confidence||''}<br><span class="small">${warnings}</span></td><td>${d.status||''}</td><td><a target="_blank" href="${d.url||'#'}">原文</a></td></tr>`;
+  });
+  table.innerHTML=out;
 }
 
+function renderAll(){
+  try{ syncData(); }catch(e){ showRuntimeError('syncData failed', e); }
+  try{ refreshTimestamp(); }catch(e){ showRuntimeError('refreshTimestamp failed', e); }
+  try{ renderMetrics(); }catch(e){ showRuntimeError('renderMetrics failed', e); }
+  try{ renderCharts(); }catch(e){ showRuntimeError('renderCharts failed', e); }
+  try{ renderTable(); }catch(e){ showRuntimeError('renderTable failed', e); }
+  try{ renderWatch(); }catch(e){ showRuntimeError('renderWatch failed', e); }
+  try{ renderSources(); }catch(e){ showRuntimeError('renderSources failed', e); }
+  try{ renderMap(); }catch(e){ showRuntimeError('renderMap failed', e); }
+  try{ renderCandidates(); }catch(e){ showRuntimeError('renderCandidates failed', e); }
+}
+
+async function loadJsonFile(path){
+  const res=await fetch(path+'?ts='+Date.now(),{cache:'no-store'});
+  if(!res.ok) throw new Error(path+' HTTP '+res.status);
+  return await res.json();
+}
 async function loadExternalData(){
-  // 先用内置/现有数据渲染页面，避免任何外部 JSON 读取失败导致页面空白。
+  renderAll();
   try{
-    data=[...baseData,...manualData];
-    renderAll();
-  }catch(e){
-    console.error('initial render failed', e);
-  }
-
+    const json=await loadJsonFile('data/timeseries.json');
+    if(Array.isArray(json)&&json.length) baseData=json;
+  }catch(e){ console.warn(e); }
   try{
-    const res=await fetch('data/timeseries.json',{cache:'no-store'});
-    if(res.ok){
-      const json=await res.json();
-      if(Array.isArray(json) && json.length){
-        baseData=json;
-        manualData=JSON.parse(localStorage.getItem('bdbvManualData')||'[]');
-        data=[...baseData,...manualData];
-      }
+    const json=await loadJsonFile('data/regional.json');
+    if(Array.isArray(json)&&json.length){
+      const current={...regionalCounts};
+      json.forEach(item=>{ if(item.key) current[item.key]={name:item.name||item.region||item.key,region:item.region||item.name||item.key,cases:Number(item.cases??0),deaths:item.deaths??null,date:item.date||'',source:item.source||'',note:`${item.source||'外置数据'}${item.date?' · '+item.date:''}：${item.note||''}`}; });
+      regionalCounts=current;
     }
-  }catch(e){
-    console.warn('timeseries.json 读取失败，使用内置备用数据。', e);
-  }
-
-  try{
-    const res=await fetch('data/regional.json',{cache:'no-store'});
-    if(res.ok){
-      const json=await res.json();
-      if(Array.isArray(json) && json.length){
-        const current={...regionalCounts};
-        json.forEach(item=>{
-          const key=item.key;
-          if(!key) return;
-          current[key]={
-            name:item.name || item.region || current[key]?.name || key,
-            region:item.region || item.name || current[key]?.region || key,
-            country:item.country || current[key]?.country || '',
-            cases:Number(item.cases ?? 0),
-            deaths:item.deaths ?? null,
-            date:item.date || '',
-            source:item.source || '外置数据',
-            note:`${item.source||'外置数据'}${item.date ? ' · '+item.date : ''}：${item.note||''}`
-          };
-        });
-        regionalCounts=current;
-      }
-    }
-  }catch(e){
-    console.warn('regional.json 读取失败，使用内置备用地区数据。', e);
-  }
-
-  try{
-    const res=await fetch('data/news.json',{cache:'no-store'});
-    if(res.ok){
-      const json=await res.json();
-      if(Array.isArray(json)){
-        localNews=json;
-      }
-    }
-  }catch(e){
-    console.warn('news.json 读取失败。', e);
-  }
-
-  try{
-    const res=await fetch('data/candidates.json',{cache:'no-store'});
-    if(res.ok){
-      const json=await res.json();
-      if(Array.isArray(json)){
-        candidateData=json;
-      }
-    }
-  }catch(e){
-    console.warn('candidates.json 读取失败。', e);
-  }
-
-  try{
-    renderAll();
-    renderLocalNews();
-    renderCandidates();
-  }catch(e){
-    console.error('final render failed', e);
-  }
+  }catch(e){ console.warn(e); }
+  try{ const json=await loadJsonFile('data/news.json'); if(Array.isArray(json)) localNews=json; }catch(e){ console.warn(e); }
+  try{ const json=await loadJsonFile('data/candidates.json'); if(Array.isArray(json)) candidateData=json; }catch(e){ console.warn(e); }
+  renderAll();
+  renderLocalNews();
+  renderCandidates();
 }
-
-
 async function refreshNewsFromJson(){
   const box=document.getElementById('newsList');
   if(box) box.innerHTML='<p class="small">正在重新读取 data/news.json……</p>';
-  try{
-    const res=await fetch('data/news.json?ts='+Date.now(),{cache:'no-store'});
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const json=await res.json();
-    if(!Array.isArray(json)) throw new Error('news.json 不是数组格式');
-    localNews=json;
-    renderLocalNews();
-  }catch(e){
-    console.error('refreshNewsFromJson failed', e);
-    if(box){
-      box.innerHTML='<p class="small">读取 data/news.json 失败。请检查 GitHub 仓库中 data/news.json 是否存在、JSON 格式是否正确，或等待 Netlify 重新部署完成。</p>';
-    }
-  }
+  try{ const json=await loadJsonFile('data/news.json'); if(Array.isArray(json)){ localNews=json; renderLocalNews(); } else throw new Error('news.json 不是数组'); }
+  catch(e){ if(box) box.innerHTML='<p class="small">读取 data/news.json 失败。请检查 JSON 格式或等待 Netlify 部署完成。</p>'; showRuntimeError('refreshNewsFromJson failed', e); }
+}
+async function loadGdeltNews(){ return refreshNewsFromJson(); }
+
+function addPoint(){
+  const p={date:dDate.value,cases:+dCases.value||null,deaths:+dDeaths.value||null,recovered:+dRecovered.value||null,type:dType.value,source:dSource.value||'手动录入',url:dUrl.value||'#',note:dNote.value||''};
+  manualData.push(p);
+  localStorage.setItem('bdbvManualData',JSON.stringify(manualData));
+  renderAll();
+}
+function downloadData(){
+  const blob=new Blob([JSON.stringify(sorted(),null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='bundibugyo_2026_data.json'; a.click(); URL.revokeObjectURL(a.href);
 }
 
-async function loadGdeltNews(){
-  // 已弃用：前端不再直接访问 GDELT，避免 CORS 和网络不稳定。
-  // 新闻数据由 GitHub Actions 写入 data/news.json，本函数仅刷新该 JSON。
-  return refreshNewsFromJson();
-}
-function renderAll(){
-  try{ refreshTimestamp(); }catch(e){ console.warn(e); }
-  try{ renderMetrics(); }catch(e){ console.error('renderMetrics failed', e); }
-  try{ renderCharts(); }catch(e){ console.error('renderCharts failed', e); }
-  try{ renderTable(); }catch(e){ console.error('renderTable failed', e); }
-  try{ renderWatch(); }catch(e){ console.error('renderWatch failed', e); }
-  try{ renderSources(); }catch(e){ console.error('renderSources failed', e); }
-  try{ renderMap(); }catch(e){ console.error('renderMap failed', e); }
-  try{ renderCandidates(); }catch(e){ console.error('renderCandidates failed', e); }
-}
-loadExternalData();
+document.addEventListener('DOMContentLoaded',()=>{ loadExternalData().catch(e=>showRuntimeError('loadExternalData failed', e)); });
+if(document.readyState!=='loading'){ loadExternalData().catch(e=>showRuntimeError('loadExternalData failed', e)); }
 </script>
 </body>
 </html>
