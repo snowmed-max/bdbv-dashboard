@@ -38,7 +38,7 @@
         <h1>2026 本迪布焦病毒病流行动态仪表盘</h1>
         <div class="subtitle">用于快速查看官方通报、媒体快讯、病例与死亡趋势、重点地区扩散、接触者追踪和应对进展。正式病例、死亡和康复趋势采用 WHO / WHO AFRO 官方通报作为唯一主数据源；Reuters、AP、GDELT 等仅用于新闻动态和候选线索，不进入正式趋势图。数据文件包括 data/timeseries.json、data/regional.json、data/news.json 和 data/candidates.json。</div>
         <div class="toolbar">
-          <button class="btn primary" onclick="loadGdeltNews()">抓取最新新闻动态</button>
+          <button class="btn primary" onclick="refreshNewsFromJson()">刷新新闻数据</button>
           <button class="btn" onclick="refreshTimestamp()">刷新页面时间</button>
           <button class="btn" onclick="downloadData()">导出当前数据 JSON</button>
           <button class="btn" onclick="window.print()">打印/保存 PDF</button>
@@ -173,7 +173,7 @@
     <div class="three section">
       <div class="card">
         <h2>最新新闻动态</h2>
-        <div id="newsList"><p class="small">点击“抓取最新新闻动态”后显示。若浏览器因网络或跨域限制失败，请使用页面底部的源站链接核验。</p></div>
+        <div id="newsList"><p class="small">正在读取 data/news.json。新闻数据由 GitHub Actions 自动更新；如需临时刷新，请点击“刷新新闻数据”。</p></div>
       </div>
       <div class="card">
         <h2>推荐固定数据源</h2>
@@ -479,12 +479,18 @@ function renderCandidates(){
 }
 
 function renderLocalNews(){
-  if(!localNews || !localNews.length) return;
   const box=document.getElementById('newsList');
-  box.innerHTML=localNews.map(a=>`
+  if(!box) return;
+
+  if(!localNews || !localNews.length){
+    box.innerHTML='<p class="small">暂未读取到新闻数据。请检查 data/news.json 是否存在，或到 GitHub Actions 手动运行一次自动更新。</p>';
+    return;
+  }
+
+  box.innerHTML=localNews.slice(0,12).map(a=>`
     <div class="news-item">
-      <div class="news-title"><a target="_blank" href="${a.url}">${a.title}</a></div>
-      <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体口径，待官方确认':'已收录'}</div>
+      <div class="news-title"><a target="_blank" href="${a.url}">${a.title || 'Untitled'}</a></div>
+      <div class="news-meta">${a.date||''} · ${a.source||''} · ${a.status==='media_pending'?'媒体/候选线索，不进入正式曲线':(a.status||'已收录')}</div>
       <p class="small">${a.summary||''}</p>
     </div>`).join('');
 }
@@ -547,9 +553,31 @@ async function loadExternalData(){
   renderLocalNews();
 }
 
-async function loadGdeltNews(){const box=document.getElementById('newsList'); box.innerHTML='<p class="small">正在连接 GDELT 新闻索引……</p>'; const url='https://api.gdeltproject.org/api/v2/doc/doc?query=(Bundibugyo%20OR%20%22Ebola%20Bundibugyo%22)%20(DRC%20OR%20Congo%20OR%20Uganda)&mode=artlist&format=json&maxrecords=10&sort=hybridrel';
-  try{const res=await fetch(url); const json=await res.json(); const arts=json.articles||[]; if(!arts.length)throw new Error('no articles'); box.innerHTML=arts.map(a=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${a.url}">${a.title||'Untitled'}</a></div><div class="news-meta">${a.sourceCountry||''} · ${a.domain||''} · ${a.seendate||''}</div></div>`).join('');}
-  catch(e){box.innerHTML='<p class="small">自动抓取失败，可能是网络、CORS 或 GDELT 暂时不可用。请使用右侧固定数据源核验，或部署后端代理。</p>';}
+
+async function refreshNewsFromJson(){
+  const box=document.getElementById('newsList');
+  if(box) box.innerHTML='<p class="small">正在重新读取 data/news.json……</p>';
+  try{
+    const res=await fetch('data/news.json?ts='+Date.now(),{cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const json=await res.json();
+    if(Array.isArray(json)){
+      localNews=json;
+      renderLocalNews();
+      return;
+    }
+    throw new Error('news.json 不是数组格式');
+  }catch(e){
+    if(box){
+      box.innerHTML='<p class="small">读取 data/news.json 失败。请检查 GitHub 仓库中 data/news.json 是否存在、JSON 格式是否正确，或等待 Netlify 重新部署完成。</p>';
+    }
+  }
+}
+
+async async function loadGdeltNews(){
+  // 已弃用：前端不再直接访问 GDELT，避免 CORS 和网络不稳定。
+  // 新闻数据由 GitHub Actions 写入 data/news.json，本函数仅刷新该 JSON。
+  return refreshNewsFromJson();
 }
 function renderAll(){refreshTimestamp();renderMetrics();renderCharts();renderTable();renderWatch();renderSources();renderMap();renderCandidates();}
 loadExternalData();
