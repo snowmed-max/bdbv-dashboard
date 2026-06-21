@@ -7,7 +7,7 @@
     "type": "official",
     "source": "WHO DON602",
     "url": "https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON602",
-    "note": "DRC 宣布第17次埃博拉疫情；既往 BDBV 病死率 30%–50%；无获批疫苗或特异治疗。"
+    "note": "WHO 官方通报口径。DRC 宣布第17次埃博拉疫情；BDBV 无获批疫苗或特异治疗。"
   },
   {
     "date": "2026-05-18",
@@ -17,7 +17,7 @@
     "type": "official",
     "source": "WHO AFRO SitRep 01",
     "url": "https://www.afro.who.int/countries/democratic-republic-of-congo/publication/ebola-bundibugyo-virus-disease-outbreak-democratic-republic-congo-uganda-weekly-external-situation",
-    "note": "数据截至 5月18日；DRC 初始实验室确诊，Uganda 出现输入病例；PHEIC。"
+    "note": "WHO AFRO 情况报告口径；DRC 初始实验室确诊，Uganda 出现输入病例。"
   },
   {
     "date": "2026-05-27",
@@ -27,17 +27,7 @@
     "type": "official",
     "source": "WHO DON605",
     "url": "https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON605",
-    "note": "DRC：125 确诊、17 死亡；906 疑似、223 疑似死亡。"
-  },
-  {
-    "date": "2026-06-03",
-    "cases": 381,
-    "deaths": 64,
-    "recovered": 7,
-    "type": "official",
-    "source": "NICD / public health update",
-    "url": "https://www.nicd.ac.za/situational-update-on-the-ebola-disease-outbreak-caused-by-bundibugyo-virus-democratic-republic-of-the-congo-and-uganda/",
-    "note": "DRC 口径：381 确诊、64 死亡、7 康复。"
+    "note": "WHO 官方通报口径：DRC 125 确诊、17 死亡。"
   },
   {
     "date": "2026-06-06",
@@ -47,7 +37,7 @@
     "type": "official",
     "source": "WHO DON606",
     "url": "https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON606",
-    "note": "DRC 515/91；Uganda 19/2；两国合计 534/93。"
+    "note": "WHO 官方通报口径：DRC 515/91；Uganda 19/2；两国合计 534/93。"
   },
   {
     "date": "2026-06-10",
@@ -57,46 +47,6 @@
     "type": "official",
     "source": "WHO DON607",
     "url": "https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON607",
-    "note": "DRC 676/136；Uganda 19/2；至少37人康复；DRC Ituri 占93%。"
-  },
-  {
-    "date": "2026-06-15",
-    "cases": 856,
-    "deaths": 198,
-    "recovered": null,
-    "type": "official",
-    "source": "ECDC threat update",
-    "url": "https://www.ecdc.europa.eu/en/ebola-outbreak-democratic-republic-congo-and-uganda",
-    "note": "ECDC 引 DRC 卫生部：DRC 837 确诊、196 死亡；Uganda 19/2。"
-  },
-  {
-    "date": "2026-06-18",
-    "cases": 894,
-    "deaths": 200,
-    "recovered": null,
-    "type": "media",
-    "source": "AP / Africa CDC briefing",
-    "url": "https://apnews.com/article/congo-uganda-ebola-bundibugyo-cdc-cases-18d3129c8d5e3a0641ba330549a48a8a",
-    "note": "Africa CDC：确诊 894，死亡超过200，32个卫生区；病例较前一周增38%。"
-  },
-  {
-    "date": "2026-06-19",
-    "cases": 896,
-    "deaths": null,
-    "recovered": null,
-    "type": "official",
-    "source": "CDC Current Situation",
-    "url": "https://www.cdc.gov/ebola/situation-summary/index.html",
-    "note": "CDC 页面：确认病例896；美国无相关确诊病例，旅行者总体风险低。"
-  },
-  {
-    "date": "2026-06-19",
-    "cases": 933,
-    "deaths": 245,
-    "recovered": 80,
-    "type": "media",
-    "source": "Reuters / DRC Health Minister",
-    "url": "https://www.reuters.com/business/healthcare-pharmaceuticals/congo-says-933-ebola-cases-confirmed-including-245-deaths-2026-06-19/",
-    "note": "DRC 卫生部长在 Ituri 简报：933 确诊、245 死亡、80 康复/出院。待 WHO 后续 DON 确认。"
+    "note": "WHO 官方通报口径：DRC 676/136；Uganda 19/2；至少37人康复。"
   }
 ]

@@ -36,7 +36,7 @@
       <div class="card">
         <div class="badge">BDBV 2026 · 动态流行监测原型</div>
         <h1>2026 本迪布焦病毒病流行动态仪表盘</h1>
-        <div class="subtitle">用于快速查看官方通报、媒体快讯、病例与死亡趋势、重点地区扩散、接触者追踪和应对进展。数据已拆分为 data/timeseries.json、data/regional.json 和 data/news.json；网页打开时自动读取这些数据文件。联网打开后仍可抓取公开新闻动态；项目已加入 GitHub Actions 自动抓取模块：新闻动态可自动更新，官方/准官方数字进入候选数据并在高置信条件下自动追加。</div>
+        <div class="subtitle">用于快速查看官方通报、媒体快讯、病例与死亡趋势、重点地区扩散、接触者追踪和应对进展。正式病例、死亡和康复趋势采用 WHO / WHO AFRO 官方通报作为唯一主数据源；Reuters、AP、GDELT 等仅用于新闻动态和候选线索，不进入正式趋势图。数据文件包括 data/timeseries.json、data/regional.json、data/news.json 和 data/candidates.json。</div>
         <div class="toolbar">
           <button class="btn primary" onclick="loadGdeltNews()">抓取最新新闻动态</button>
           <button class="btn" onclick="refreshTimestamp()">刷新页面时间</button>
@@ -46,12 +46,18 @@
       </div>
       <div class="card">
         <div class="status"><span class="dot"></span><span id="timeNow">页面加载中</span></div>
-        <p class="small">数据分层原则：WHO/CDC/ECDC/卫生部为“官方/准官方”；Reuters/AP/新华社等为“媒体最新”；媒体口径用于预警和追踪，需等待官方通报确认。</p>
-        <div class="alert">当前判断：疫情仍在快速演变，DRC 伊图里为核心疫区，已波及北基伍、南基伍并出现乌干达跨境病例。重点关注医疗机构感染、接触者追踪率、社区传播和葬礼/照护相关暴露。</div>
+        <p class="small">数据分层原则：正式趋势图仅采用 WHO / WHO AFRO 口径；Reuters、AP、GDELT、CDC、ECDC、Africa CDC 等仅作为新闻动态、候选线索或交叉核验来源，不自动进入正式曲线。</p>
+        <div class="alert">当前判断：正式曲线以 WHO / WHO AFRO 最新已确认口径为准；媒体快讯可能更快，但只作为提醒。重点关注 WHO 后续通报是否确认病例增长、地区扩散、医疗机构感染和接触者追踪变化。</div>
       </div>
     </div>
 
     <div class="grid4 section" id="metrics"></div>
+
+    <div class="section card">
+      <h2>数据口径说明</h2>
+      <p class="small">本页正式趋势图与首页 WHO 正式数据卡片只读取 <code>data/timeseries.json</code>，该文件应仅收录 WHO / WHO AFRO 已确认口径。媒体快讯、GDELT 新闻和其他机构页面只进入 <code>data/news.json</code> 或 <code>data/candidates.json</code>，用于提醒和人工复核，不直接进入正式曲线。</p>
+    </div>
+
 
     <div class="two section">
       <div class="card">
@@ -142,8 +148,15 @@
     </div>
 
     <div class="section card">
+      <h2>候选数据待复核</h2>
+      <p class="small">此表读取 <code>data/candidates.json</code>。其中的数字来自自动抓取或人工临时添加，只用于复核线索；确认属于 WHO / WHO AFRO 正式口径后，才应手动写入 <code>data/timeseries.json</code>。</p>
+      <table id="candidateTable"></table>
+    </div>
+
+
+    <div class="section card">
       <h2>手动添加/修正数据点</h2>
-      <p class="small">临时补充数据可在这里添加，添加后只保存在当前浏览器 localStorage。正式长期更新建议直接编辑 GitHub 仓库中的 data/timeseries.json、data/regional.json 和 data/news.json。</p>
+      <p class="small">临时补充数据可在这里添加，添加后只保存在当前浏览器 localStorage。正式长期更新建议只把 WHO / WHO AFRO 已确认数据写入 data/timeseries.json；媒体快讯请写入 data/news.json 或 data/candidates.json。</p>
       <div class="form">
         <input id="dDate" type="date" value="2026-06-20" />
         <input id="dCases" type="number" placeholder="累计确诊" />
@@ -234,6 +247,7 @@ let baseData = fallbackSeedData;
 let manualData = JSON.parse(localStorage.getItem('bdbvManualData')||'[]');
 let data = [...baseData, ...manualData];
 let localNews = [];
+let candidateData = [];
 let trendChart, cfrChart;
 function sorted(){return [...data].sort((a,b)=>a.date.localeCompare(b.date));}
 function latest(type=null){const rows=sorted().filter(d=>!type||d.type===type);return rows[rows.length-1];}
@@ -242,10 +256,10 @@ function cfr(d){return d.deaths&&d.cases?((d.deaths/d.cases)*100).toFixed(1)+'%'
 function refreshTimestamp(){document.getElementById('timeNow').textContent='本地查看时间：'+new Date().toLocaleString('zh-CN',{hour12:false});}
 function renderMetrics(){const off=latest('official'), med=latest('media'), base=med&&(!off||med.date>=off.date)?med:off; const officialNote=off?`${off.source} · ${off.date}`:'无'; const mediaNote=med?`${med.source} · ${med.date}`:'无';
   document.getElementById('metrics').innerHTML = `
-    <div class="metric"><div class="label">最新官方/准官方累计确诊</div><div class="num">${fmt(off?.cases)}</div><div class="note">${officialNote}</div></div>
-    <div class="metric"><div class="label">最新官方/准官方死亡</div><div class="num">${fmt(off?.deaths)}</div><div class="note">CFR ${cfr(off||{})}</div></div>
-    <div class="metric"><div class="label">媒体最新确诊</div><div class="num">${fmt(med?.cases)}</div><div class="note">${mediaNote}</div></div>
-    <div class="metric"><div class="label">媒体最新死亡/康复</div><div class="num">${fmt(med?.deaths)} / ${fmt(med?.recovered)}</div><div class="note">需等待官方后续确认</div></div>`;
+    <div class="metric"><div class="label">WHO 正式累计确诊</div><div class="num">${fmt(off?.cases)}</div><div class="note">${officialNote}</div></div>
+    <div class="metric"><div class="label">WHO 正式累计死亡</div><div class="num">${fmt(off?.deaths)}</div><div class="note">CFR ${cfr(off||{})}</div></div>
+    <div class="metric"><div class="label">媒体快讯确诊</div><div class="num">${fmt(med?.cases)}</div><div class="note">${mediaNote}</div></div>
+    <div class="metric"><div class="label">媒体快讯死亡/康复</div><div class="num">${fmt(med?.deaths)} / ${fmt(med?.recovered)}</div><div class="note">不进入正式曲线</div></div>`;
 }
 function renderCharts(){
   const rows=sorted();
@@ -447,6 +461,23 @@ function renderMap(){
 }
 
 
+
+function renderCandidates(){
+  const table=document.getElementById('candidateTable');
+  if(!table) return;
+  const rows=(candidateData||[]).slice(0,20);
+  let html='<tr><th>日期</th><th>来源</th><th>候选数字</th><th>可信度/警告</th><th>状态</th><th>链接</th></tr>';
+  if(!rows.length){
+    html+='<tr><td colspan="6" class="small">暂无候选数据。</td></tr>';
+  }
+  rows.forEach(d=>{
+    const nums=`确诊 ${fmt(d.cases)} / 死亡 ${fmt(d.deaths)} / 康复 ${fmt(d.recovered)}`;
+    const warnings=Array.isArray(d.warnings)?d.warnings.join('; '):(d.warnings||'');
+    html+=`<tr><td>${d.date||''}</td><td>${d.source||''}</td><td>${nums}</td><td>${d.confidence||''}<br><span class="small">${warnings}</span></td><td>${d.status||''}</td><td><a target="_blank" href="${d.url||'#'}">原文</a></td></tr>`;
+  });
+  table.innerHTML=html;
+}
+
 function renderLocalNews(){
   if(!localNews || !localNews.length) return;
   const box=document.getElementById('newsList');
@@ -520,7 +551,7 @@ async function loadGdeltNews(){const box=document.getElementById('newsList'); bo
   try{const res=await fetch(url); const json=await res.json(); const arts=json.articles||[]; if(!arts.length)throw new Error('no articles'); box.innerHTML=arts.map(a=>`<div class="news-item"><div class="news-title"><a target="_blank" href="${a.url}">${a.title||'Untitled'}</a></div><div class="news-meta">${a.sourceCountry||''} · ${a.domain||''} · ${a.seendate||''}</div></div>`).join('');}
   catch(e){box.innerHTML='<p class="small">自动抓取失败，可能是网络、CORS 或 GDELT 暂时不可用。请使用右侧固定数据源核验，或部署后端代理。</p>';}
 }
-function renderAll(){refreshTimestamp();renderMetrics();renderCharts();renderTable();renderWatch();renderSources();renderMap();}
+function renderAll(){refreshTimestamp();renderMetrics();renderCharts();renderTable();renderWatch();renderSources();renderMap();renderCandidates();}
 loadExternalData();
 </script>
 </body>

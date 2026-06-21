@@ -79,3 +79,13 @@ data/news.json
 ## 自动抓取更新
 
 本项目已加入 GitHub Actions 自动更新模块。具体启用方法见 `AUTO_UPDATE.md`。
+
+
+## 自动脚本防错
+
+本版本采用候选优先策略，默认不自动写入正式时间线。详见 `SAFETY_RULES.md`。
+
+
+## WHO-only 正式数据模式
+
+本版本将正式趋势图限定为 WHO / WHO AFRO 口径，媒体和其他来源只作为新闻动态和候选线索。详见 `WHO_ONLY_MODE.md`。
